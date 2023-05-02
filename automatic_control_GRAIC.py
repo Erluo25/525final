@@ -938,12 +938,14 @@ def compare_blks(blk1:BLK, blk2:BLK):
 # ------ environment initialization --------------------------------------------
 #===============================================================================
 class RACE_ENV:
-    def __init__(self, args, collision_weight, distance_weight, center_line_weight, render=False):
+    def __init__(self, args, collision_weight, distance_weight, center_line_weight, render=False, round_precision=2, stuck_counter_limit=20):
         self.args = args
         self.render=render
         self.collision_weight = collision_weight
         self.distance_weight = distance_weight
         self.center_line_weight = center_line_weight
+        self.round_precision = round_precision
+        self.stuck_counter_limit = stuck_counter_limit
         if args.seed:
             random.seed(args.seed)
 
@@ -1006,12 +1008,12 @@ class RACE_ENV:
             self.start = True
             self.err = None
 
-            state, _, terminated, distance = self.get_current_state()
+            state, _, terminated = self.get_current_state()
             if terminated is True:
                 self.err = "Can not terminate at start"
                 print(self.err)
                 return None, self.err
-            self.prev_dist = round(distance, 2)
+            self.prev_dist = round(state[-1], self.round_precision)
             self.stuck_counter = 0
             return state, None
 
@@ -1030,7 +1032,7 @@ class RACE_ENV:
         
         if self.controller.parse_events():
             print("Parse event exist")
-            return None, None, True, None
+            return None, None, True
             
         self.world.tick(self.clock)
         if self.render is True:
@@ -1065,7 +1067,7 @@ class RACE_ENV:
                 print("Lap Done")
                 print("Final Score is ", self.total_score)
                 self.idx = 0
-                return None, 100, True, distance
+                return None, 100, True
             
             # Draw the waypoints as Gate for Fancy Visualization
             x, y, z = self.waypoints[self.idx]
@@ -1172,30 +1174,30 @@ class RACE_ENV:
             intensity = self.hud.has_collision[1]
             r3 = self.collision_weight * (-1) * intensity
         reward = r1 + r2 + r3
-        print("r1 is: ", r1)
-        print("r2 is: ", r2)
-        print("r3 is: ", r3)
-        print("Total reward is: ", reward)
         # Return the desired objects
-        return (filtered_obstacles, self.waypoints[self.idx:end_waypoints], vel, transform, boundary), reward, False, distance 
+        return (filtered_obstacles, self.waypoints[self.idx:end_waypoints], vel, transform, boundary, distance), reward, False 
 
 
     # Only call this function after a reset
     def step(self, control):
         self.world.player.apply_control(control)
-        state, reward, terminated, distance = self.get_current_state()
+        state, reward, terminated = self.get_current_state()
+        
+        if state is None and reward == 100 and terminated is True:
+            return state, reward, terminated, False
+
         truncation = False
-        rounded_dist = round(distance, 2)
+        rounded_dist = round(state[-1], self.round_precision)
         if rounded_dist == self.prev_dist:
             self.stuck_counter += 1
-            print("Current stuck counter is: ", self.stuck_counter)
+            #print("Current stuck counter is: ", self.stuck_counter)
         else:
             self.stuck_counter = 0
         self.prev_dist = rounded_dist
-        if self.stuck_counter == 20: # Allows stucking at the same position for 50 times
-            print("Already stuck for 30 times")
+        if self.stuck_counter == self.stuck_counter_limit: # Allows stucking at the same position for 50 times
+            print("Already stuck for", self.stuck_counter_limit, " times")
             truncation = True
-        return state, reward, terminated, truncation, distance
+        return state, reward, terminated, truncation
 
     
 #===============================================================================
@@ -1204,7 +1206,7 @@ class RACE_ENV:
 def test(args, agent, render=False, rounds=1):
     # Initialize the environment
     for _ in range(0, rounds):
-        env = RACE_ENV(args, collision_weight=30, distance_weight=1, center_line_weight=5, render=render)
+        env = RACE_ENV(args, collision_weight=30, distance_weight=5, center_line_weight=5, render=render)
         t1 = time.time()
         state, info = env.reset()
         t2 = time.time()
@@ -1215,7 +1217,8 @@ def test(args, agent, render=False, rounds=1):
         test_end = False
         while test_end is False:
             control = agent.run_step(state[0], state[1], state[2], state[3], state[4])
-            state, reward, terminated, truncation, distance = env.step(control)
+            state, reward, terminated, truncation = env.step(control)
+            print("Reward is: ", reward)
             if terminated or truncation:
                 print("Meet termination or truncation")
                 test_end = True
@@ -1309,7 +1312,7 @@ def main():
     try:
         #game_loop(args)
         agent = Agent()
-        test(args, agent, True, rounds=1)
+        test(args, agent, True, rounds=3)
         print('end of game loop')
     except KeyboardInterrupt:
         print('\nCancelled by user. Bye!')
