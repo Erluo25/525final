@@ -26,6 +26,7 @@ import weakref
 import pickle
 import time
 import subprocess
+#from scenario import *
 
 try:
     import pygame
