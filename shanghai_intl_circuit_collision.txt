@@ -92,3 +92,5 @@ Time: 13.53, Collision Actor ID: 0, Collision Actor Type: static.terrain
 Time: 14.27, Collision Actor ID: 0, Collision Actor Type: static.terrain
 Time: 14.38, Collision Actor ID: 0, Collision Actor Type: static.terrain
 Time: 14.28, Collision Actor ID: 0, Collision Actor Type: static.terrain
+Time: 5.47, Collision Actor ID: 0, Collision Actor Type: static.terrain
+Time: 4.32, Collision Actor ID: 0, Collision Actor Type: static.terrain

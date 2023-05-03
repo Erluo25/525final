@@ -147,7 +147,7 @@ def get_control_from_action(action):
   action = convert_action_type(action)
   control = carla.VehicleControl()
   steer = action.item(0)
-  print("Steer type is: ", type(steer))
+  #print("Steer type is: ", type(steer))
   control.steer = steer
 
   acc = action.item(1)

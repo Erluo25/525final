@@ -1236,8 +1236,8 @@ def a2c_train():
     from agent import Agent
 
     agent = Agent(episode_num=5, gamma=0.9, a_lr=1e-5, c_lr=3e-5, batch_size=1024, batch_round=1,\
-                    update_round=5, step_limit=500000, action_dim=2, \
-                    action_bound=torch.tensor([math.pi / 6, 6]).to(device), rb_max=2048, input_dim=206)
+                    update_round=5, step_limit=50000, action_dim=2, \
+                    action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=2048, input_dim=206)
     agent.train()
     plot(agent.training_reward_x, agent.training_reward_y, "Cumulative reward", fn="./cumulative_reward.png")
     return

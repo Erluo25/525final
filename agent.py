@@ -179,7 +179,7 @@ class Agent():
       update_counter += 1
 
       # Main entry of the episoide
-      env = RACE_ENV(args, collision_weight=30, distance_weight=1, center_line_weight=5, render=False, round_precision=2, stuck_counter_limit=18)
+      env = RACE_ENV(args, collision_weight=30, distance_weight=1, center_line_weight=5, render=True, round_precision=3, stuck_counter_limit=12)
       current_state, info = env.reset()
       current_state = convert_state_to_tensor(current_state)
 
@@ -264,6 +264,8 @@ class Agent():
       self.training_reward_y.append(episode_reward)
       print("Episode ", i, " finish takes time: ", episode_duration,\
             " with reward: ", episode_reward)
+      if (i % 100 == 0):
+        torch.save(self.act_net.state_dict(), "./actor.pth")
       
     print("Total training time is: ", total_train_time)
     torch.save(self.act_net.state_dict(), "./actor.pth")
