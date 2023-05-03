@@ -281,7 +281,7 @@ def run(sn, role_name):
         else:
             break
 
-"""
+
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(
         description='CARLA Automatic Control Client')
@@ -302,4 +302,3 @@ if __name__ == "__main__":
     run(sn, role_name)
     # except Exception as e:
     #     print(e)
-"""

@@ -10,7 +10,7 @@
 
 from __future__ import print_function
 
-import argparse
+#import argparse
 import collections
 import datetime
 import glob
@@ -26,7 +26,8 @@ import weakref
 import pickle
 import time
 import subprocess
-#from scenario import *
+import multiprocessing
+from utils import *
 
 try:
     import pygame
@@ -61,10 +62,10 @@ try:
 except IndexError:
     pass
 
-import carla
+#import carla
 from carla import ColorConverter as cc
 
-from agent import Agent
+
 
 
 # ==============================================================================
@@ -283,7 +284,7 @@ class HUD(object):
         collision = [x / max_col for x in collision]
         vehicles = world.world.get_actors().filter('vehicle.*')
        
-        print("max col is: ", max_col)
+        #print("max col is: ", max_col)
         if self.frame == collision_info[0]:
             self.has_collision = (collision_info[0], (collision_info[1] / max_col)) 
         #print("self frame is: ", self.frame)
@@ -779,7 +780,7 @@ def game_loop(args):
             cur_x, cur_y, cur_z = cur_pos.x, cur_pos.y, cur_pos.z
             target_x, target_y, target_z = waypoints[idx]
             distance = math.sqrt((cur_x - target_x)**2 + (cur_y-target_y)**2)
-            print(distance, idx)
+            #print(distance, idx)
 
             # The case where each episode should stop due to stucking too long
             rounded_dist = round(distance, 1)
@@ -938,7 +939,7 @@ def compare_blks(blk1:BLK, blk2:BLK):
 #===============================================================================
 # ------ environment initialization --------------------------------------------
 #===============================================================================
-class RACE_ENV:
+class RACE_ENV():
     def __init__(self, args, collision_weight, distance_weight, center_line_weight, render=False, round_precision=2, stuck_counter_limit=20):
         self.args = args
         self.render=render
@@ -1016,6 +1017,10 @@ class RACE_ENV:
                 return None, self.err
             self.prev_dist = round(state[-1], self.round_precision)
             self.stuck_counter = 0
+            #sn = ScenarioNode(self.original_wps, self.client.get_world(), "ego_vehicle", self.args.map, 2000)
+            #self.subprocess = multiprocessing.Process(target=run, args=(sn, "ego_vehicle",))
+            #time.sleep(5)
+            #self.subprocess.start()
             return state, None
 
         except Exception as err:
@@ -1046,8 +1051,8 @@ class RACE_ENV:
         
         #if self.hud.has_collision is not None:
         #    print(self.hud.has_collision)
-        print("hud frame is: ", self.hud.frame)
-        print("collision info is: ", self.hud.has_collision)
+        #print("hud frame is: ", self.hud.frame)
+        #print("collision info is: ", self.hud.has_collision)
 
         vehicle = self.world.player
         cur_pos = vehicle.get_location()
@@ -1055,7 +1060,7 @@ class RACE_ENV:
         cur_x, cur_y, cur_z = cur_pos.x, cur_pos.y, cur_pos.z
         target_x, target_y, target_z = self.waypoints[self.idx]
         distance = math.sqrt((cur_x - target_x)**2 + (cur_y-target_y)**2)
-        print(distance, self.idx)
+        #print(distance, self.idx)
         
         # Both Scoring Function + Waypoint Update
         if distance < 5:
@@ -1196,7 +1201,7 @@ class RACE_ENV:
             self.stuck_counter = 0
         self.prev_dist = rounded_dist
         if self.stuck_counter == self.stuck_counter_limit: # Allows stucking at the same position for 50 times
-            print("Already stuck for", self.stuck_counter_limit, " times")
+            #print("Already stuck for", self.stuck_counter_limit, " times")
             truncation = True
         return state, reward, terminated, truncation
 
@@ -1206,56 +1211,42 @@ class RACE_ENV:
 #===============================================================================
 def test(args, agent, render=False, rounds=1):
     # Initialize the environment
+    
     for _ in range(0, rounds):
-        env = RACE_ENV(args, collision_weight=30, distance_weight=5, center_line_weight=5, render=render)
         t1 = time.time()
+        env = RACE_ENV(args, collision_weight=30, distance_weight=5, center_line_weight=5, render=render, round_precision=2, stuck_counter_limit=15)
         state, info = env.reset()
         t2 = time.time()
-        print("Initialization time is: ", t2 - t1)
+        #print("Initialization time is: ", t2 - t1)
         if info is not None:
             print("Testing: error environment reset")
             return
         test_end = False
         while test_end is False:
-            control = agent.run_step(state[0], state[1], state[2], state[3], state[4])
+            control = agent.run_step(state[0], state[1], state[2], state[3], state[4], state[5])
             state, reward, terminated, truncation = env.step(control)
-            print("Reward is: ", reward)
+            #print("Reward is: ", reward)
             if terminated or truncation:
-                print("Meet termination or truncation")
+                #print("Meet termination or truncation")
                 test_end = True
                 env.close()
     return
 
+def a2c_train():
+    from agent import Agent
+
+    agent = Agent(episode_num=5, gamma=0.9, a_lr=1e-5, c_lr=3e-5, batch_size=1024, batch_round=1,\
+                    update_round=5, step_limit=500000, action_dim=2, \
+                    action_bound=torch.tensor([math.pi / 6, 6]).to(device), rb_max=2048, input_dim=206)
+    agent.train()
+    plot(agent.training_reward_x, agent.training_reward_y, "Cumulative reward", fn="./cumulative_reward.png")
+    return
 #===============================================================================
 # ------------ utils  ----------------------------------------
 #===============================================================================
-def extract_road_boundary(boundary):
-    """extract the left and right road boundary"""
 
-    # extract left road boundary
-    left = []
 
-    for p in boundary[0]:
-        left.append([p.transform.location.x, p.transform.location.y])
 
-    left = np.asarray(left)
-
-    # extract right road boundary
-    right = []
-
-    for p in boundary[1]:
-        right.append([p.transform.location.x, p.transform.location.y])
-
-    right = np.asarray(right)
-
-    return left, right
-
-def compute_distance(pt1, pt2, target_pt):
-    pt1, pt2, target_pt = np.array(pt1), np.array(pt2), np.array(target_pt)
-    n = np.abs((pt2[0] - pt1[0]) * (pt1[1] - target_pt[1]) - (pt1[0] - target_pt[0])*(pt2[1] - pt1[1]))
-    d = np.sqrt((pt2[0] - pt1[0])**2 + (pt2[1] - pt1[1])**2)
-    dist = n / d
-    return dist.item()
 
 # ==============================================================================
 # -- main() --------------------------------------------------------------
@@ -1264,7 +1255,7 @@ def compute_distance(pt1, pt2, target_pt):
 
 def main():
     """Main method"""
-
+    """
     argparser = argparse.ArgumentParser(
         description='CARLA Automatic Control Client')
     argparser.add_argument(
@@ -1309,11 +1300,9 @@ def main():
     args.width, args.height = [int(x) for x in args.res.split('x')]
 
     print(__doc__)
-
+    """
     try:
-        #game_loop(args)
-        agent = Agent()
-        test(args, agent, True, rounds=3)
+        a2c_train()
         print('end of game loop')
     except KeyboardInterrupt:
         print('\nCancelled by user. Bye!')
