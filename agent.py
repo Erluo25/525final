@@ -35,20 +35,20 @@ class Agent1():
         # Feel Free to use carla API; however, since we already provide info to you, using API will only add to your delay time
         # Currently the timeout is set to 10s
         # Print the state information 
-        print("Obstacles are: ", filtered_obstacles)
-        wps = np.array(waypoints)
-        print("Waypoints shape: ", wps.shape)
-        print("Velocity are: ", vel.x, vel.y, vel.z)
-        print(f"Current transformation location x { transform.location.x}, y {transform.location.y} ")
-        print(f"Carla transform rotation yaw {transform.rotation.yaw}, orientation: {np.deg2rad(transform.rotation.yaw)}")
-        left, right = extract_road_boundary(boundary)
-        print(f"Boundary information Left shape: {left.shape}, Right shape: {right.shape}")
-        print("The distance is: ", distance)
+        #print("Obstacles are: ", filtered_obstacles)
+        #wps = np.array(waypoints)
+        #print("Waypoints shape: ", wps.shape)
+        #print("Velocity are: ", vel.x, vel.y, vel.z)
+        #print(f"Current transformation location x { transform.location.x}, y {transform.location.y} ")
+        #print(f"Carla transform rotation yaw {transform.rotation.yaw}, orientation: {np.deg2rad(transform.rotation.yaw)}")
+        #left, right = extract_road_boundary(boundary)
+        #print(f"Boundary information Left shape: {left.shape}, Right shape: {right.shape}")
+        #print("The distance is: ", distance)
 
 
 
-        state = (filtered_obstacles, waypoints, vel, transform, boundary,distance)
-        state = convert_state_to_tensor(state)
+        #state = (filtered_obstacles, waypoints, vel, transform, boundary,distance)
+        #state = convert_state_to_tensor(state)
         # 
         print("Reach Customized Agent")
         control = carla.VehicleControl()
@@ -134,7 +134,9 @@ class Critic_Net_Num(nn.Module):
 class Agent():
   def __init__(self, episode_num, gamma, a_lr, c_lr, batch_size,\
                batch_round, update_round, step_limit,\
-               action_dim, action_bound, rb_max, input_dim):
+               action_dim, action_bound, rb_max, input_dim,\
+              collision_weight, distance_weight, center_line_weight, 
+              render, round_precision, stuck_counter_limit):
     
     # Basic parameters for the A2C methods
     self.episode_num = episode_num
@@ -164,7 +166,20 @@ class Agent():
     self.reward_rb = None
     self.rb_size = 0
     self.rb_max = rb_max
+
+    self.collision_weight = collision_weight
+    self.distance_weight = distance_weight
+    self.center_line_weight = center_line_weight
+    self.render = render
+    self.round_precision = round_precision
+    self.stuck_counter_limit = stuck_counter_limit
   
+  def run_step(self, state):
+    result_state = convert_state_to_tensor(state)
+    action = self.act_net.sample_action_from_state_gaussian(result_state)
+    control = get_control_from_action(action)
+    return control
+  	
   def train(self):
     update_counter = 0
     total_train_time = 0
@@ -179,7 +194,11 @@ class Agent():
       update_counter += 1
 
       # Main entry of the episoide
-      env = RACE_ENV(args, collision_weight=30, distance_weight=1, center_line_weight=5, render=True, round_precision=3, stuck_counter_limit=12)
+      env = RACE_ENV(args, collision_weight=self.collision_weight, \
+                     distance_weight=self.distance_weight, \
+                      center_line_weight=self.center_line_weight, \
+                      render=self.render, round_precision=self.round_precision,\
+                      stuck_counter_limit=self.stuck_counter_limit)
       current_state, info = env.reset()
       current_state = convert_state_to_tensor(current_state)
 
@@ -191,6 +210,7 @@ class Agent():
         # Convert the action to control object before stepping.
         control = get_control_from_action(action)
         next_state, reward, terminated, truncated = env.step(control)
+        print("Reward is: ", reward)
         next_state = convert_state_to_tensor(next_state)
         #next_state = torch.FloatTensor(next_state).view(1, -1).to(device)
         episode_reward += reward
@@ -264,11 +284,15 @@ class Agent():
       self.training_reward_y.append(episode_reward)
       print("Episode ", i, " finish takes time: ", episode_duration,\
             " with reward: ", episode_reward)
-      if (i % 100 == 0):
+      if (i % 50 == 0):
         torch.save(self.act_net.state_dict(), "./actor.pth")
+        torch.save(self.critic_net.state_dict(), "./critic.pth")
+        plot(self.training_reward_x, self.training_reward_y, "Cumulative reward", fn="./cumulative_reward.png")
       
     print("Total training time is: ", total_train_time)
     torch.save(self.act_net.state_dict(), "./actor.pth")
+    torch.save(self.critic_net.state_dict(), "./critic.pth")
+    plot(self.training_reward_x, self.training_reward_y, "Cumulative reward", fn="./cumulative_reward.png")
     return
 
   def batch_update(self):

@@ -512,8 +512,8 @@ class CollisionSensor(object):
         
         if event.other_actor.id not in self.prev_collision_actor_id:
             self.prev_collision_actor_id.append(event.other_actor.id)
-            with open("{}_collision.txt".format(self.args.map), 'a') as f:
-                f.write("Time: {}, Collision Actor ID: {}, Collision Actor Type: {}\n".format(round(event.timestamp, 2), event.other_actor.id, event.other_actor.type_id))
+            #with open("{}_collision.txt".format(self.args.map), 'a') as f:
+            #    f.write("Time: {}, Collision Actor ID: {}, Collision Actor Type: {}\n".format(round(event.timestamp, 2), event.other_actor.id, event.other_actor.type_id))
 
 # ==============================================================================
 # -- LaneInvasionSensor --------------------------------------------------------
@@ -1010,17 +1010,28 @@ class RACE_ENV():
             self.start = True
             self.err = None
 
-            state, _, terminated = self.get_current_state()
-            if terminated is True:
+            # Pre-compute the waypoint distances
+            total_dist_to_go = 0
+            cumulative_dist = [0]
+            for i in range(0, len(self.waypoints) - 1):
+                x1, y1, _ = self.waypoints[i]
+                x2, y2, _ = self.waypoints[i + 1]
+                temp_dist = math.sqrt((x1 - x2)**2 + (y1 - y2)**2)
+                total_dist_to_go += temp_dist
+                cumulative_dist.append(total_dist_to_go)
+            assert len(cumulative_dist) == len(self.waypoints), "Pre-compute distance error"
+            cumulative_dist = np.array(cumulative_dist)
+            cumulative_dist = total_dist_to_go - cumulative_dist
+            self.cumulative_dist = cumulative_dist
+            self.prev_remain_dist = None
+
+            state, _, terminated, truncated = self.get_current_state()
+            if terminated or truncated is True:
                 self.err = "Can not terminate at start"
                 print(self.err)
                 return None, self.err
             self.prev_dist = round(state[-1], self.round_precision)
             self.stuck_counter = 0
-            #sn = ScenarioNode(self.original_wps, self.client.get_world(), "ego_vehicle", self.args.map, 2000)
-            #self.subprocess = multiprocessing.Process(target=run, args=(sn, "ego_vehicle",))
-            #time.sleep(5)
-            #self.subprocess.start()
             return state, None
 
         except Exception as err:
@@ -1038,7 +1049,7 @@ class RACE_ENV():
         
         if self.controller.parse_events():
             print("Parse event exist")
-            return None, None, True
+            return None, None, True, False
             
         self.world.tick(self.clock)
         if self.render is True:
@@ -1060,6 +1071,7 @@ class RACE_ENV():
         cur_x, cur_y, cur_z = cur_pos.x, cur_pos.y, cur_pos.z
         target_x, target_y, target_z = self.waypoints[self.idx]
         distance = math.sqrt((cur_x - target_x)**2 + (cur_y-target_y)**2)
+        target_dist = distance
         #print(distance, self.idx)
         
         # Both Scoring Function + Waypoint Update
@@ -1073,8 +1085,13 @@ class RACE_ENV():
                 print("Lap Done")
                 print("Final Score is ", self.total_score)
                 self.idx = 0
-                return None, 100, True
+                return None, 1000, True, False
             
+            # Consider the case of crossing the boundary. 
+            crossing_diff = self.cumulative_dist[self.idx - 1] - self.cumulative_dist[self.idx]
+            #print("Difference of crossing is: ", crossing_diff)
+            target_dist =  target_dist + crossing_diff
+
             # Draw the waypoints as Gate for Fancy Visualization
             x, y, z = self.waypoints[self.idx]
             location = carla.Location(x, y, z)
@@ -1167,32 +1184,62 @@ class RACE_ENV():
 
         end_waypoints = min(len(self.waypoints), self.idx + 50)
 
+        # Compute the remain distance
+
+        remain_distance = target_dist + self.cumulative_dist[self.idx]
+        #print("Current idx is: ", self.idx)
+        if self.prev_remain_dist is None:
+            progress = 0
+        else:
+        #    print("distance is: ", distance)
+        #    print("cum distance is: ", self.cumulative_dist[self.idx])
+        #    print("Current remain distance: ", remain_distance)
+        #    print("Previous remain distance: ", self.prev_remain_dist)
+            progress = self.prev_remain_dist - remain_distance # Can be negative
+
+        self.prev_remain_dist = remain_distance # Update the remain distance.
+
         # Compute the current block center line and the distance to the center line.
         mml, mmr = extract_road_boundary(mb)
         mmc = 0.5 * (mml + mmr)
         dist_to_center_line = compute_distance(mmc[0], mmc[1], [transform.location.x, transform.location.y])
-        
+
         # Construct the reward
-        r1 = self.distance_weight * (-1) * distance # The distance to the target 
+        #print("Progress is: ", progress)
+        r1 = self.distance_weight * progress # The progress has been made
+        #print("r1 is: ", r1)
+        #print("Distance to center line is: ", dist_to_center_line)
         r2 = self.center_line_weight * (-1) * dist_to_center_line # distance to the center line
+        #print("r2 is: ", r2)
         r3 = 0
+        collision_happen_flag = False
         if self.hud.has_collision is not None:
+            collision_happen_flag = True
             intensity = self.hud.has_collision[1]
+            #print("Collision happens, intensity is: ", intensity)
             r3 = self.collision_weight * (-1) * intensity
+            #print("r3 is: ", r3)
         reward = r1 + r2 + r3
+        #print("total reward is: ", reward)
+        #print()
         # Return the desired objects
-        return (filtered_obstacles, self.waypoints[self.idx:end_waypoints], vel, transform, boundary, distance), reward, False 
+        return (filtered_obstacles, self.waypoints[self.idx:end_waypoints], vel, transform, boundary, distance), reward, False, collision_happen_flag 
 
 
     # Only call this function after a reset
     def step(self, control):
         self.world.player.apply_control(control)
-        state, reward, terminated = self.get_current_state()
+        state, reward, terminated, collision_happen_flag = self.get_current_state()
         
         if state is None and reward == 100 and terminated is True:
             return state, reward, terminated, False
-
-        truncation = False
+        
+        if collision_happen_flag is True:
+            return state, reward, terminated, True
+        else:
+            return state, reward, terminated, False
+        """
+         truncation = False
         rounded_dist = round(state[-1], self.round_precision)
         if rounded_dist == self.prev_dist:
             self.stuck_counter += 1
@@ -1204,20 +1251,20 @@ class RACE_ENV():
             #print("Already stuck for", self.stuck_counter_limit, " times")
             truncation = True
         return state, reward, terminated, truncation
+        """
+       
 
     
 #===============================================================================
 # ------------ testing with some agent  ----------------------------------------
 #===============================================================================
-def test(args, agent, render=False, rounds=1):
-    # Initialize the environment
-    
+def test2(args, render=True, rounds=1):
+    from agent import Agent1
+    agent = Agent1()
     for _ in range(0, rounds):
-        t1 = time.time()
-        env = RACE_ENV(args, collision_weight=30, distance_weight=5, center_line_weight=5, render=render, round_precision=2, stuck_counter_limit=15)
+        env = RACE_ENV(args, collision_weight=30, distance_weight=10, center_line_weight=5, render=render, round_precision=2, stuck_counter_limit=18)
         state, info = env.reset()
-        t2 = time.time()
-        #print("Initialization time is: ", t2 - t1)
+
         if info is not None:
             print("Testing: error environment reset")
             return
@@ -1232,14 +1279,44 @@ def test(args, agent, render=False, rounds=1):
                 env.close()
     return
 
+
+def test(args, render=False, rounds=1):
+    from agent import Agent
+    # Initialize the environment
+    agent = Agent(episode_num=10000, gamma=0.9, a_lr=1e-5, c_lr=3e-5, batch_size=1024, batch_round=1,\
+                    update_round=5, step_limit=5000, action_dim=2, \
+                    action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=2048, input_dim=206)
+    loaded_state_dict = torch.load("./actor.pth")
+    agent.act_net.load_state_dict(loaded_state_dict)
+
+    for _ in range(0, rounds):
+        
+        env = RACE_ENV(args, collision_weight=30, distance_weight=5, center_line_weight=5, render=render, round_precision=3, stuck_counter_limit=20)
+        state, info = env.reset()
+
+        if info is not None:
+            print("Testing: error environment reset")
+            return
+        test_end = False
+        while test_end is False:
+            control = agent.run_step(state)
+            state, reward, terminated, truncation = env.step(control)
+            #print("Reward is: ", reward)
+            if terminated or truncation:
+                #print("Meet termination or truncation")
+                test_end = True
+                env.close()
+    return
+
 def a2c_train():
     from agent import Agent
 
     agent = Agent(episode_num=5, gamma=0.9, a_lr=1e-5, c_lr=3e-5, batch_size=1024, batch_round=1,\
-                    update_round=5, step_limit=50000, action_dim=2, \
-                    action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=2048, input_dim=206)
+                    update_round=5, step_limit=10000, action_dim=2, \
+                    action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=2048, input_dim=206,\
+                    collision_weight=300, distance_weight=20, center_line_weight=5,\
+                    render=True, round_precision=3, stuck_counter_limit=30)
     agent.train()
-    plot(agent.training_reward_x, agent.training_reward_y, "Cumulative reward", fn="./cumulative_reward.png")
     return
 #===============================================================================
 # ------------ utils  ----------------------------------------
@@ -1254,55 +1331,9 @@ def a2c_train():
 
 
 def main():
-    """Main method"""
-    """
-    argparser = argparse.ArgumentParser(
-        description='CARLA Automatic Control Client')
-    argparser.add_argument(
-        '--host',
-        metavar='H',
-        default='127.0.0.1',
-
-        help='IP of the host server (default: 127.0.0.1)')
-    argparser.add_argument(
-        '-p', '--port',
-        metavar='P',
-        default=2000,
-        type=int,
-        help='TCP port to listen to (default: 2000)')
-    argparser.add_argument(
-        '--res',
-        metavar='WIDTHxHEIGHT',
-        default='1280x720',
-        help='Window resolution (default: 1280x720)')
-    argparser.add_argument(
-        '--sync',
-        action='store_true',
-        help='Synchronous mode execution')
-    argparser.add_argument(
-        '--filter',
-        metavar='PATTERN',
-        # TODO: change for other vehicle models
-        default='vehicle.tesla.model3',
-        help='Actor filter (default: "vehicle.*")')
-    argparser.add_argument(
-        '-s', '--seed',
-        help='Set seed for repeating executions (default: None)',
-        default=1234,
-        type=int)
-    argparser.add_argument(
-        '-m', '--map',
-        help='Set Different Map for testing: shanghai_intl_circuit, t1_triple, t2_triple, t3, t4',
-        default="shanghai_intl_circuit")
-
-    args = argparser.parse_args()
-
-    args.width, args.height = [int(x) for x in args.res.split('x')]
-
-    print(__doc__)
-    """
     try:
         a2c_train()
+        #test2(args, True, 1)
         print('end of game loop')
     except KeyboardInterrupt:
         print('\nCancelled by user. Bye!')

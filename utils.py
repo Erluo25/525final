@@ -73,7 +73,7 @@ def get_device():
 
 device = get_device()
 
-def plot(x, y, title = "", fn=""):
+def plot(x, y, title = "", fn="", shown=False):
   x = np.array(x)
   y = np.array(y)
   plt.title(title)
@@ -82,7 +82,8 @@ def plot(x, y, title = "", fn=""):
   plt.plot(x, y, color ="red")
   filename = fn
   plt.savefig(filename)
-  plt.show()
+  if shown:
+    plt.show()
 
 
 def extract_road_boundary(boundary):
