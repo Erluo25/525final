@@ -1297,7 +1297,7 @@ def test(args, render=False, rounds=1):
 def a2c_train():
     from agent import Agent
 
-    agent = Agent(episode_num=50, gamma=0.9, a_lr=1e-5, c_lr=3e-5, batch_size=1024, batch_round=1,\
+    agent = Agent(episode_num=5000, gamma=0.9, a_lr=1e-5, c_lr=3e-5, batch_size=1024, batch_round=1,\
                     update_round=3, step_limit=10000, action_dim=2, \
                     action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=2048, input_dim=206,\
                     collision_weight=30, distance_weight=20, center_line_weight=1,\

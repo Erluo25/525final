@@ -73,6 +73,7 @@ class Actor_Net_Num(nn.Module):
      
      # Need to have tanh to bound the output action in range [-3, 3]
      self.tanh = nn.Tanh()
+     self.sigmoid = nn.Sigmoid()
 
      self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
 
@@ -91,6 +92,7 @@ class Actor_Net_Num(nn.Module):
 
     # Obtain the covariance matrix
     cov_mat = x[..., self.action_dim:].view(-1, self.action_dim, self.action_dim)
+    cov_mat = self.sigmoid(cov_mat)
     transpose_cov_mat = cov_mat.transpose(1, 2)
     cov_mat = torch.bmm(cov_mat, transpose_cov_mat)
     id_mat = torch.eye(self.action_dim).repeat(cov_mat.size(0), 1, 1).to(device)
