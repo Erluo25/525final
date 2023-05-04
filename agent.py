@@ -295,6 +295,13 @@ class Agent():
         self.training_reward_y.append(episode_reward)
         print("Episode ", i, " finish takes time: ", episode_duration,\
               " with reward: ", episode_reward)
+        if (i % 100 == 0):
+          torch.save(self.act_net.state_dict(), "./actor.pth")
+          torch.save(self.critic_net.state_dict(), "./critic.pth")
+          x = torch.tensor(self.training_reward_x)
+          y = torch.tensor(self.training_reward_y)
+          torch.save(x, 'tx.pt')
+          torch.save(y, 'ty.pt')
 
       print("Total training time is: ", total_train_time)
     finally:
