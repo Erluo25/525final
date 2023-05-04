@@ -1309,7 +1309,7 @@ def a2c_train():
     agent.train()
     torch.save(agent.act_net.state_dict(), "./actor.pth")
     torch.save(agent.critic_net.state_dict(), "./critic.pth")
-    print(agent.training_reward_x, agent.training_reward_y)
+    #print(agent.training_reward_x, agent.training_reward_y)
     #plot(agent.training_reward_x, agent.training_reward_y, "Cumulative reward", fn="./cumulative_reward.png", shown=True)
     x = torch.tensor(agent.training_reward_x)
     y = torch.tensor(agent.training_reward_y)
@@ -1331,8 +1331,8 @@ def a2c_train():
 
 def main():
     try:
-        #a2c_train()
-        test2(args, render=True, rounds=20)
+        a2c_train()
+        #test2(args, render=True, rounds=20)
         print('end of game loop')
     except KeyboardInterrupt:
         print('\nCancelled by user. Bye!')
