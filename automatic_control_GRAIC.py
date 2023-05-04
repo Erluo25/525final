@@ -1314,11 +1314,11 @@ def a2c_train():
                     update_round=5, step_limit=10000000, action_dim=2, \
                     action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=4096, input_dim=208,\
                     collision_weight=3, distance_weight=5, center_line_weight=0.5,\
-                    render=False, round_precision=3, stuck_counter_limit=20)
-    #loaded_actor_dict = torch.load("./actor.pth")
-    #agent.act_net.load_state_dict(loaded_actor_dict)
-    #loaded_critic_dict = torch.load("./critic.pth")
-    #agent.critic_net.load_state_dict(loaded_critic_dict)
+                    render=True, round_precision=3, stuck_counter_limit=20)
+    loaded_actor_dict = torch.load("./actor.pth")
+    agent.act_net.load_state_dict(loaded_actor_dict)
+    loaded_critic_dict = torch.load("./critic.pth")
+    agent.critic_net.load_state_dict(loaded_critic_dict)
     agent.train()
     torch.save(agent.act_net.state_dict(), "./actor.pth")
     torch.save(agent.critic_net.state_dict(), "./critic.pth")
