@@ -188,6 +188,7 @@ class Agent():
     for i in range (0, self.episode_num):
       episode_start_time = time.time()
       episode_reward = 0
+      
       if update_counter == self.update_round:
         self.critic_net_copy = deepcopy(self.critic_net)
         update_counter = 0
@@ -202,17 +203,25 @@ class Agent():
       current_state, info = env.reset()
       current_state = convert_state_to_tensor(current_state)
 
-      for j in range(self.step_limit):
+      step_count = 0
+      loop_end = False
+      while loop_end is False:
+        
+        step_count += 1
+        if step_count >= self.step_limit:
+          loop_end = True
+
         # Step the environment based on the selected action
         # Note: this action is on GPU and is a tensor
         action = self.act_net.sample_action_from_state_gaussian(current_state)
         
         # Convert the action to control object before stepping.
         control = get_control_from_action(action)
+        
         next_state, reward, terminated, truncated = env.step(control)
-        print("Reward is: ", reward)
+        #print("Reward is: ", reward)
+        
         next_state = convert_state_to_tensor(next_state)
-        #next_state = torch.FloatTensor(next_state).view(1, -1).to(device)
         episode_reward += reward
        
         # Process the done tensor and reward tensor
@@ -272,10 +281,9 @@ class Agent():
 
         # If this state action reaches a final state, end the episode
         if terminated or truncated:
+          loop_end = True
           env.close()
-          break
-
-      
+          
       # Here reach the end of each episode
       episode_end_time = time.time()
       episode_duration = episode_end_time - episode_start_time
@@ -284,15 +292,8 @@ class Agent():
       self.training_reward_y.append(episode_reward)
       print("Episode ", i, " finish takes time: ", episode_duration,\
             " with reward: ", episode_reward)
-      if (i % 50 == 0):
-        torch.save(self.act_net.state_dict(), "./actor.pth")
-        torch.save(self.critic_net.state_dict(), "./critic.pth")
-        plot(self.training_reward_x, self.training_reward_y, "Cumulative reward", fn="./cumulative_reward.png")
-      
+
     print("Total training time is: ", total_train_time)
-    torch.save(self.act_net.state_dict(), "./actor.pth")
-    torch.save(self.critic_net.state_dict(), "./critic.pth")
-    plot(self.training_reward_x, self.training_reward_y, "Cumulative reward", fn="./cumulative_reward.png")
     return
 
   def batch_update(self):

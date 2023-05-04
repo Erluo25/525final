@@ -1206,7 +1206,7 @@ class RACE_ENV():
 
         # Construct the reward
         #print("Progress is: ", progress)
-        r1 = self.distance_weight * progress # The progress has been made
+        r1 = self.distance_weight * (progress) # The progress has been made
         #print("r1 is: ", r1)
         #print("Distance to center line is: ", dist_to_center_line)
         r2 = self.center_line_weight * (-1) * dist_to_center_line # distance to the center line
@@ -1236,10 +1236,8 @@ class RACE_ENV():
         
         if collision_happen_flag is True:
             return state, reward, terminated, True
-        else:
-            return state, reward, terminated, False
-        """
-         truncation = False
+        
+        truncation = False
         rounded_dist = round(state[-1], self.round_precision)
         if rounded_dist == self.prev_dist:
             self.stuck_counter += 1
@@ -1250,19 +1248,20 @@ class RACE_ENV():
         if self.stuck_counter == self.stuck_counter_limit: # Allows stucking at the same position for 50 times
             #print("Already stuck for", self.stuck_counter_limit, " times")
             truncation = True
+            reward -= 10000
         return state, reward, terminated, truncation
-        """
+        
        
 
     
 #===============================================================================
 # ------------ testing with some agent  ----------------------------------------
 #===============================================================================
-def test2(args, render=True, rounds=1):
+def test2(args, render=False, rounds=1):
     from agent import Agent1
     agent = Agent1()
     for _ in range(0, rounds):
-        env = RACE_ENV(args, collision_weight=30, distance_weight=10, center_line_weight=5, render=render, round_precision=2, stuck_counter_limit=18)
+        env = RACE_ENV(args, collision_weight=30, distance_weight=20, center_line_weight=1, render=render, round_precision=3, stuck_counter_limit=20)
         state, info = env.reset()
 
         if info is not None:
@@ -1283,15 +1282,17 @@ def test2(args, render=True, rounds=1):
 def test(args, render=False, rounds=1):
     from agent import Agent
     # Initialize the environment
-    agent = Agent(episode_num=10000, gamma=0.9, a_lr=1e-5, c_lr=3e-5, batch_size=1024, batch_round=1,\
-                    update_round=5, step_limit=5000, action_dim=2, \
-                    action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=2048, input_dim=206)
+    agent = Agent(episode_num=100, gamma=0.9, a_lr=1e-5, c_lr=3e-5, batch_size=1024, batch_round=1,\
+                    update_round=3, step_limit=10000, action_dim=2, \
+                    action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=2048, input_dim=206,\
+                    collision_weight=30, distance_weight=20, center_line_weight=1,\
+                    render=False, round_precision=3, stuck_counter_limit=20)
     loaded_state_dict = torch.load("./actor.pth")
     agent.act_net.load_state_dict(loaded_state_dict)
 
     for _ in range(0, rounds):
         
-        env = RACE_ENV(args, collision_weight=30, distance_weight=5, center_line_weight=5, render=render, round_precision=3, stuck_counter_limit=20)
+        env = RACE_ENV(args, collision_weight=30, distance_weight=5, center_line_weight=5, render=render, round_precision=4, stuck_counter_limit=100)
         state, info = env.reset()
 
         if info is not None:
@@ -1311,12 +1312,25 @@ def test(args, render=False, rounds=1):
 def a2c_train():
     from agent import Agent
 
-    agent = Agent(episode_num=5, gamma=0.9, a_lr=1e-5, c_lr=3e-5, batch_size=1024, batch_round=1,\
-                    update_round=5, step_limit=10000, action_dim=2, \
+    agent = Agent(episode_num=100, gamma=0.9, a_lr=1e-5, c_lr=3e-5, batch_size=1024, batch_round=1,\
+                    update_round=3, step_limit=10000, action_dim=2, \
                     action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=2048, input_dim=206,\
-                    collision_weight=300, distance_weight=20, center_line_weight=5,\
-                    render=True, round_precision=3, stuck_counter_limit=30)
+                    collision_weight=30, distance_weight=20, center_line_weight=1,\
+                    render=False, round_precision=3, stuck_counter_limit=20)
+    loaded_actor_dict = torch.load("./actor.pth")
+    agent.act_net.load_state_dict(loaded_actor_dict)
+    loaded_critic_dict = torch.load("./critic.pth")
+    agent.critic_net.load_state_dict(loaded_critic_dict)
     agent.train()
+    torch.save(agent.act_net.state_dict(), "./actor.pth")
+    torch.save(agent.critic_net.state_dict(), "./critic.pth")
+    print(agent.training_reward_x, agent.training_reward_y)
+    #plot(agent.training_reward_x, agent.training_reward_y, "Cumulative reward", fn="./cumulative_reward.png", shown=True)
+    x = torch.tensor(agent.training_reward_x)
+    y = torch.tensor(agent.training_reward_y)
+    torch.save(x, 'tx.pt')
+    torch.save(y, 'ty.pt')
+
     return
 #===============================================================================
 # ------------ utils  ----------------------------------------
@@ -1333,7 +1347,6 @@ def a2c_train():
 def main():
     try:
         a2c_train()
-        #test2(args, True, 1)
         print('end of game loop')
     except KeyboardInterrupt:
         print('\nCancelled by user. Bye!')

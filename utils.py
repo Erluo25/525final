@@ -82,8 +82,7 @@ def plot(x, y, title = "", fn="", shown=False):
   plt.plot(x, y, color ="red")
   filename = fn
   plt.savefig(filename)
-  if shown:
-    plt.show()
+  plt.close()
 
 
 def extract_road_boundary(boundary):
