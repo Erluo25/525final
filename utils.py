@@ -39,6 +39,7 @@ argparser.add_argument(
     help='Window resolution (default: 1280x720)')
 argparser.add_argument(
     '--sync',
+    default=True,
     action='store_true',
     help='Synchronous mode execution')
 argparser.add_argument(

@@ -131,7 +131,7 @@ class World(object):
         if blueprint.has_attribute('color'):
             # color = random.choice(blueprint.get_attribute('color').recommended_values)
             blueprint.set_attribute('color', "0,255,0")
-
+        
         # Spawn the player.
         if self.player is not None:
             spawn_point = self.player.get_transform()
@@ -206,6 +206,11 @@ class World(object):
         for actor in actors:
             if actor is not None:
                 actor.destroy()
+        self.player = None
+        self.collision_sensor = None
+        self.lane_invasion_sensor = None
+        self.gnss_sensor = None
+        self.camera_manager = None
 
 
 # ==============================================================================
@@ -741,7 +746,7 @@ def game_loop(args):
         world = World(client.get_world(), hud, args)
         controller = KeyboardControl(world)
 
-        agent = Agent()
+        agent = Agent1()
 
         # TODO: Change track name to a parameter
         original_wps = pickle.load(open("./waypoints/{}".format(args.map), 'rb'))
@@ -802,8 +807,8 @@ def game_loop(args):
                     hud.notification("Score: " + str(round(total_score, 1)), 3)
                     print("Lap Done")
                     print("Final Score is ", total_score)
-                    with open("{}_score.txt".format(args.map), 'w') as f:
-                        f.write(str(round(total_score, 2)))
+                    #with open("{}_score.txt".format(args.map), 'w') as f:
+                    #    f.write(str(round(total_score, 2)))
                     idx = 0
                     break
                 
@@ -911,30 +916,6 @@ def game_loop(args):
 
         pygame.quit()
 
-"""
-class BLK:
-    # Note that each element is a 2d vector
-    def __init__(self, left, right):
-        assert left.shape == right.shape == (2,2), "Blk creation shape error"
-        self.left = left
-        self.right = right
-        self.center = 0.5 * (left + right)
-   
-    def get_current_blk_progress(self, pt):
-        start = self.center[0]
-        end = self.center[1]
-        pt = np.array(pt)
-        v = end - start
-        u = pt - start
-        self.total_length = np.linalg.norm(v)
-        self.progress = np.dot(u,v) / np.dot(v,v)
-        self.remain = self.total_length - self.progress
-        return (self.progress, self.remain)
-
-def compare_blks(blk1:BLK, blk2:BLK):
-    return np.array_equal(blk1.left, blk2.left) and np.array_equal(blk1.right, blk2.right)
-"""
-
 
 #===============================================================================
 # ------ environment initialization --------------------------------------------
@@ -950,22 +931,29 @@ class RACE_ENV():
         self.stuck_counter_limit = stuck_counter_limit
         if args.seed:
             random.seed(args.seed)
-
+        
+        pygame.init()
+        pygame.font.init()
+        
         client = carla.Client(args.host, args.port)
         client.set_timeout(4.0)
         self.client = client
 
-        self.traffic_manager = self.client.get_trafficmanager()
+        #self.traffic_manager = self.client.get_trafficmanager()
         self.sim_world = self.client.load_world(args.map)
+        
+        self.hud = HUD(args.width, args.height)
+        self.world = World(client.get_world(), self.hud, args)
 
         if args.sync:
+            print("SYNC MODE")
             settings = self.sim_world.get_settings()
             settings.synchronous_mode = True
             settings.fixed_delta_seconds = 0.05
             self.sim_world.apply_settings(settings)
 
-            self.traffic_manager.set_synchronous_mode(True)
-            self.traffic_manager.set_random_device_seed(args.seed) # define TM seed for determinism
+            #self.traffic_manager.set_synchronous_mode(True)
+            #self.traffic_manager.set_random_device_seed(args.seed) # define TM seed for determinism
         
         # TODO: Change track name to a parameter
         self.original_wps = pickle.load(open("./waypoints/{}".format(args.map), 'rb'))
@@ -979,30 +967,23 @@ class RACE_ENV():
     
     def close(self):
         if self.world is not None:
-            settings = self.world.world.get_settings()
-            settings.synchronous_mode = False
-            settings.fixed_delta_seconds = None
-            self.world.world.apply_settings(settings)
-            self.traffic_manager.set_synchronous_mode(True)
+            #settings = self.world.world.get_settings()
+            #settings.synchronous_mode = False
+            #settings.fixed_delta_seconds = None
+            #self.world.world.apply_settings(settings)
+            #self.traffic_manager.set_synchronous_mode(True)
             self.world.destroy()
             print("The world has been destoryed")
         pygame.quit()
 
     # Return state, info
     def reset(self):
-        args = self.args
-        pygame.init()
-        pygame.font.init()
-        world = None
+        if self.world is not None:
+            self.world.destroy()
+        
         try:
-            hud = HUD(args.width, args.height)
-            world = World(self.client.get_world(), hud, args)
-            controller = KeyboardControl(world)
-
             # Set the basic parameters of the environment
-            self.hud = hud
-            self.world = world
-            self.controller = controller
+            self.world.restart(self.args)
             self.waypoints = self.original_wps[1:]
             self.idx = 0 # The waypoint index
             self.clock = pygame.time.Clock()
@@ -1024,7 +1005,6 @@ class RACE_ENV():
             cumulative_dist = total_dist_to_go - cumulative_dist
             self.cumulative_dist = cumulative_dist
             self.prev_remain_dist = None
-
             state, _, terminated, truncated = self.get_current_state()
             if terminated or truncated is True:
                 self.err = "Can not terminate at start"
@@ -1042,14 +1022,16 @@ class RACE_ENV():
     # Trying to return state, reward, terminated, distance
     def get_current_state(self):
         self.clock.tick()
-        if self.args.sync:
-            self.world.world.tick()
-        else:
-            self.world.world.wait_for_tick()
         
-        if self.controller.parse_events():
-            print("Parse event exist")
-            return None, None, True, False
+        self.world.world.tick()
+        #if self.args.sync:
+        #    self.world.world.tick()
+        #else:
+        #    self.world.world.wait_for_tick()
+        
+        #if self.controller.parse_events():
+        #    print("Parse event exist")
+        #    return None, None, True, False
             
         self.world.tick(self.clock)
         if self.render is True:
@@ -1260,22 +1242,25 @@ class RACE_ENV():
 def test2(args, render=False, rounds=1):
     from agent import Agent1
     agent = Agent1()
-    for _ in range(0, rounds):
+    try:
         env = RACE_ENV(args, collision_weight=30, distance_weight=20, center_line_weight=1, render=render, round_precision=3, stuck_counter_limit=20)
-        state, info = env.reset()
-
-        if info is not None:
-            print("Testing: error environment reset")
-            return
-        test_end = False
-        while test_end is False:
-            control = agent.run_step(state[0], state[1], state[2], state[3], state[4], state[5])
-            state, reward, terminated, truncation = env.step(control)
-            #print("Reward is: ", reward)
-            if terminated or truncation:
-                #print("Meet termination or truncation")
-                test_end = True
-                env.close()
+        for i in range(0, rounds):
+            print("Start round: ", i)
+            state, info = env.reset()
+            if info is not None:
+                print("Testing: error environment reset")
+                return
+            test_end = False
+            while test_end is False:
+                control = agent.run_step(state[0], state[1], state[2], state[3], state[4], state[5])
+                state, reward, terminated, truncation = env.step(control)
+                print("Reward is: ", reward)
+                if terminated or truncation:
+                    #print("Meet termination or truncation")
+                    test_end = True
+            print("Finish round: ", i)
+    finally:
+        env.close()
     return
 
 
@@ -1312,7 +1297,7 @@ def test(args, render=False, rounds=1):
 def a2c_train():
     from agent import Agent
 
-    agent = Agent(episode_num=100, gamma=0.9, a_lr=1e-5, c_lr=3e-5, batch_size=1024, batch_round=1,\
+    agent = Agent(episode_num=50, gamma=0.9, a_lr=1e-5, c_lr=3e-5, batch_size=1024, batch_round=1,\
                     update_round=3, step_limit=10000, action_dim=2, \
                     action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=2048, input_dim=206,\
                     collision_weight=30, distance_weight=20, center_line_weight=1,\
@@ -1346,7 +1331,8 @@ def a2c_train():
 
 def main():
     try:
-        a2c_train()
+        #a2c_train()
+        test2(args, render=True, rounds=20)
         print('end of game loop')
     except KeyboardInterrupt:
         print('\nCancelled by user. Bye!')

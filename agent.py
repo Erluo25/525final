@@ -184,116 +184,119 @@ class Agent():
     update_counter = 0
     total_train_time = 0
     self.critic_net_copy = deepcopy(self.critic_net)
-
-    for i in range (0, self.episode_num):
-      episode_start_time = time.time()
-      episode_reward = 0
-      
-      if update_counter == self.update_round:
-        self.critic_net_copy = deepcopy(self.critic_net)
-        update_counter = 0
-      update_counter += 1
-
-      # Main entry of the episoide
+    try:
       env = RACE_ENV(args, collision_weight=self.collision_weight, \
-                     distance_weight=self.distance_weight, \
-                      center_line_weight=self.center_line_weight, \
-                      render=self.render, round_precision=self.round_precision,\
-                      stuck_counter_limit=self.stuck_counter_limit)
-      current_state, info = env.reset()
-      current_state = convert_state_to_tensor(current_state)
+                    distance_weight=self.distance_weight, \
+                    center_line_weight=self.center_line_weight, \
+                    render=self.render, round_precision=self.round_precision,\
+                    stuck_counter_limit=self.stuck_counter_limit)
+      
+      for i in range (0, self.episode_num):
+        # Main entry of the episode.
+        episode_start_time = time.time()
+        episode_reward = 0
+        
+        if update_counter == self.update_round:
+          self.critic_net_copy = deepcopy(self.critic_net)
+          update_counter = 0
+        update_counter += 1
+        
+        # Reset the environment
+        current_state, info = env.reset()
+        current_state = convert_state_to_tensor(current_state)
 
-      step_count = 0
-      loop_end = False
-      while loop_end is False:
-        
-        step_count += 1
-        if step_count >= self.step_limit:
-          loop_end = True
-
-        # Step the environment based on the selected action
-        # Note: this action is on GPU and is a tensor
-        action = self.act_net.sample_action_from_state_gaussian(current_state)
-        
-        # Convert the action to control object before stepping.
-        control = get_control_from_action(action)
-        
-        next_state, reward, terminated, truncated = env.step(control)
-        #print("Reward is: ", reward)
-        
-        next_state = convert_state_to_tensor(next_state)
-        episode_reward += reward
-       
-        # Process the done tensor and reward tensor
-        done_tensor = torch.tensor([[1]]).to(device) if terminated or truncated\
-                                  else torch.tensor([[0]]).to(device)
-        reward_tensor = torch.tensor([[reward]]).to(device).to(torch.float32)
-
-        # Stacking the replay buffer
-        if self.rb_size == 0:
-          # Initializing the replay buffer
-          assert self.current_state_rb is None and self.next_state_rb is None \
-            and self.action_rb is None and self.done_list_rb is None and \
-            self.reward_rb is None, "Invalid initial replay buffer size"
-          self.current_state_rb = deepcopy(current_state)
-          self.next_state_rb = deepcopy(next_state)
-          self.action_rb = deepcopy(action)
-          self.done_list_rb = deepcopy(done_tensor)
-          self.reward_rb = deepcopy(reward_tensor)
-          self.rb_size += 1
-        else:
-          # Checking the replay buffer is stacking in the right size
-          assert self.current_state_rb.size(0) == self.next_state_rb.size(0)\
-            == self.action_rb.size(0) == self.done_list_rb.size(0) ==\
-            self.reward_rb.size(0) == self.rb_size, "Invalid stack size during stacking"
-          assert self.current_state_rb.size() == self.next_state_rb.size(),\
-              "Current state stack size not equal to next state stack size "
-          assert self.action_rb.size(1) == self.act_net.action_dim, \
-              "Action stack width is incorrect"
-          assert self.done_list_rb.size(1) == self.reward_rb.size(1) == 1,\
-              "Reward stack width and done list stack width is not eqaul to 1"
+        step_count = 0
+        loop_end = False
+        while loop_end is False:
           
-          # Stack to the existing replay buffer
-          self.current_state_rb = torch.vstack((self.current_state_rb, current_state))
-          self.next_state_rb = torch.vstack((self.next_state_rb, next_state))
-          self.action_rb = torch.vstack((self.action_rb, action))
-          self.done_list_rb = torch.vstack((self.done_list_rb, done_tensor))
-          self.reward_rb = torch.vstack((self.reward_rb, reward_tensor))
-          self.rb_size += 1
+          step_count += 1
+          if step_count >= self.step_limit:
+            loop_end = True
 
-          # Under the case where rb exceed max, throw out prevous elements
-          if self.rb_size > self.rb_max:
-            self.current_state_rb = self.current_state_rb[-self.rb_max:]
-            self.next_state_rb = self.next_state_rb[-self.rb_max:]
-            self.action_rb = self.action_rb[-self.rb_max:]
-            self.done_list_rb = self.done_list_rb[-self.rb_max:]
-            self.reward_rb = self.reward_rb[-self.rb_max:]
-            self.rb_size = self.rb_max
-            assert self.current_state_rb.size(0) == self.rb_size,\
-                "Resizing replay buffer error."
-
-        # Don't forget to update current state
-        current_state = next_state
-
-        # Perform the batch update for both actor and critic network
-        for _ in range(0, self.update_round):
-          self.batch_update()
-
-        # If this state action reaches a final state, end the episode
-        if terminated or truncated:
-          loop_end = True
-          env.close()
+          # Step the environment based on the selected action
+          # Note: this action is on GPU and is a tensor
+          action = self.act_net.sample_action_from_state_gaussian(current_state)
           
-      # Here reach the end of each episode
-      episode_end_time = time.time()
-      episode_duration = episode_end_time - episode_start_time
-      total_train_time += episode_duration
-      self.training_reward_x.append(i)
-      self.training_reward_y.append(episode_reward)
-      print("Episode ", i, " finish takes time: ", episode_duration,\
-            " with reward: ", episode_reward)
+          # Convert the action to control object before stepping.
+          control = get_control_from_action(action)
+          
+          next_state, reward, terminated, truncated = env.step(control)
+          #print("Reward is: ", reward)
+          
+          next_state = convert_state_to_tensor(next_state)
+          episode_reward += reward
+        
+          # Process the done tensor and reward tensor
+          done_tensor = torch.tensor([[1]]).to(device) if terminated or truncated\
+                                    else torch.tensor([[0]]).to(device)
+          reward_tensor = torch.tensor([[reward]]).to(device).to(torch.float32)
 
-    print("Total training time is: ", total_train_time)
+          # Stacking the replay buffer
+          if self.rb_size == 0:
+            # Initializing the replay buffer
+            assert self.current_state_rb is None and self.next_state_rb is None \
+              and self.action_rb is None and self.done_list_rb is None and \
+              self.reward_rb is None, "Invalid initial replay buffer size"
+            self.current_state_rb = deepcopy(current_state)
+            self.next_state_rb = deepcopy(next_state)
+            self.action_rb = deepcopy(action)
+            self.done_list_rb = deepcopy(done_tensor)
+            self.reward_rb = deepcopy(reward_tensor)
+            self.rb_size += 1
+          else:
+            # Checking the replay buffer is stacking in the right size
+            assert self.current_state_rb.size(0) == self.next_state_rb.size(0)\
+              == self.action_rb.size(0) == self.done_list_rb.size(0) ==\
+              self.reward_rb.size(0) == self.rb_size, "Invalid stack size during stacking"
+            assert self.current_state_rb.size() == self.next_state_rb.size(),\
+                "Current state stack size not equal to next state stack size "
+            assert self.action_rb.size(1) == self.act_net.action_dim, \
+                "Action stack width is incorrect"
+            assert self.done_list_rb.size(1) == self.reward_rb.size(1) == 1,\
+                "Reward stack width and done list stack width is not eqaul to 1"
+            
+            # Stack to the existing replay buffer
+            self.current_state_rb = torch.vstack((self.current_state_rb, current_state))
+            self.next_state_rb = torch.vstack((self.next_state_rb, next_state))
+            self.action_rb = torch.vstack((self.action_rb, action))
+            self.done_list_rb = torch.vstack((self.done_list_rb, done_tensor))
+            self.reward_rb = torch.vstack((self.reward_rb, reward_tensor))
+            self.rb_size += 1
+
+            # Under the case where rb exceed max, throw out prevous elements
+            if self.rb_size > self.rb_max:
+              self.current_state_rb = self.current_state_rb[-self.rb_max:]
+              self.next_state_rb = self.next_state_rb[-self.rb_max:]
+              self.action_rb = self.action_rb[-self.rb_max:]
+              self.done_list_rb = self.done_list_rb[-self.rb_max:]
+              self.reward_rb = self.reward_rb[-self.rb_max:]
+              self.rb_size = self.rb_max
+              assert self.current_state_rb.size(0) == self.rb_size,\
+                  "Resizing replay buffer error."
+
+          # Don't forget to update current state
+          current_state = next_state
+
+          # Perform the batch update for both actor and critic network
+          for _ in range(0, self.update_round):
+            self.batch_update()
+
+          # If this state action reaches a final state, end the episode
+          if terminated or truncated:
+            loop_end = True
+            
+        # Here reach the end of each episode
+        episode_end_time = time.time()
+        episode_duration = episode_end_time - episode_start_time
+        total_train_time += episode_duration
+        self.training_reward_x.append(i)
+        self.training_reward_y.append(episode_reward)
+        print("Episode ", i, " finish takes time: ", episode_duration,\
+              " with reward: ", episode_reward)
+
+      print("Total training time is: ", total_train_time)
+    finally:
+      env.close()
     return
 
   def batch_update(self):
