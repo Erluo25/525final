@@ -1005,6 +1005,10 @@ class RACE_ENV():
             cumulative_dist = total_dist_to_go - cumulative_dist
             self.cumulative_dist = cumulative_dist
             self.prev_remain_dist = None
+            
+            self.prev_acc = 0
+            self.prev_steer = 0
+            
             state, _, terminated, truncated = self.get_current_state()
             if terminated or truncated is True:
                 self.err = "Can not terminate at start"
@@ -1205,12 +1209,20 @@ class RACE_ENV():
         #print("total reward is: ", reward)
         #print()
         # Return the desired objects
-        return (filtered_obstacles, self.waypoints[self.idx:end_waypoints], vel, transform, boundary, distance), reward, False, collision_happen_flag 
+        return (filtered_obstacles, self.waypoints[self.idx:end_waypoints], vel, transform,\
+                 boundary, distance, self.prev_acc, self.prev_steer), reward, False, collision_happen_flag 
 
 
     # Only call this function after a reset
     def step(self, control):
         self.world.player.apply_control(control)
+        
+        if control.brake == 0:
+            self.prev_acc = control.throttle
+        else:
+            self.prev_acc = (-1) * control.brake
+        self.prev_steer = control.steer
+        
         state, reward, terminated, collision_happen_flag = self.get_current_state()
         
         if state is None and reward == 100 and terminated is True:
@@ -1269,7 +1281,7 @@ def test(args, render=False, rounds=1):
     # Initialize the environment
     agent = Agent(episode_num=100, gamma=0.9, a_lr=1e-5, c_lr=3e-5, batch_size=1024, batch_round=1,\
                     update_round=3, step_limit=100000, action_dim=2, \
-                    action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=2048, input_dim=206,\
+                    action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=2048, input_dim=208,\
                     collision_weight=30, distance_weight=20, center_line_weight=1,\
                     render=False, round_precision=3, stuck_counter_limit=20)
     loaded_state_dict = torch.load("./actor.pth")
@@ -1297,15 +1309,15 @@ def test(args, render=False, rounds=1):
 def a2c_train():
     from agent import Agent
 
-    agent = Agent(episode_num=30, gamma=0.9, a_lr=1e-4, c_lr=3e-4, batch_size=1024, batch_round=1,\
+    agent = Agent(episode_num=30, gamma=0.95, a_lr=1e-5, c_lr=5e-5, batch_size=1024, batch_round=1,\
                     update_round=5, step_limit=10000, action_dim=2, \
-                    action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=4096, input_dim=206,\
+                    action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=4096, input_dim=208,\
                     collision_weight=3, distance_weight=5, center_line_weight=0.2,\
                     render=True, round_precision=3, stuck_counter_limit=20)
-    loaded_actor_dict = torch.load("./actor.pth")
-    agent.act_net.load_state_dict(loaded_actor_dict)
-    loaded_critic_dict = torch.load("./critic.pth")
-    agent.critic_net.load_state_dict(loaded_critic_dict)
+    #loaded_actor_dict = torch.load("./actor.pth")
+    #agent.act_net.load_state_dict(loaded_actor_dict)
+    #loaded_critic_dict = torch.load("./critic.pth")
+    #agent.critic_net.load_state_dict(loaded_critic_dict)
     agent.train()
     torch.save(agent.act_net.state_dict(), "./actor.pth")
     torch.save(agent.critic_net.state_dict(), "./critic.pth")

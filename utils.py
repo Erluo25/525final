@@ -124,7 +124,7 @@ def compute_distance(pt1, pt2, target_pt):
 
 def convert_state_to_tensor(state):
   if state is None:
-    return torch.zeros(1, 206)
+    return torch.zeros(1, 208)
   
   # Need to consider the case where the state is none
   obs = state[0]
@@ -139,7 +139,9 @@ def convert_state_to_tensor(state):
   bd = np.hstack((left, right))
   bd = torch.from_numpy(bd)
   dist = state[5]
-  temp_s = torch.tensor([[vel_x, vel_y, s_x, s_y, orientation, dist]])
+  acc = state[6]
+  steer = state[7]
+  temp_s = torch.tensor([[vel_x, vel_y, s_x, s_y, orientation, dist, acc, steer]])
   result_state = torch.hstack((temp_s, bd)).to(device)
   return result_state
 
