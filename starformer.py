@@ -383,10 +383,28 @@ class StarformerConfig:
         assert self.D % self.N_head == 0
         #C, H, W = self.img_size
         #pH, pW = self.patch_size
-        
+
+class TrainerConfig:
+    # optimization parameters, will be overried by given actual parameters
+    max_epochs = 10
+    batch_size = 64
+    learning_rate = 3e-4
+    betas = (0.9, 0.95)
+    grad_norm_clip = 1.0
+    weight_decay = 0.1 # only applied on matmul weights
+    
+    lr_decay = False
+    warmup_tokens = 375e6 
+    final_tokens = 260e9 
+
+    num_workers = 0 # for DataLoader
+
+    def __init__(self, **kwargs):
+        for k,v in kwargs.items():
+            setattr(self, k, v)
         
 if __name__ == "__main__":
-    mconf = StarformerConfig(2, 2 + 2*2, vector_length = 208, patch_length = 16, context_length=30, pos_drop=0.1, resid_drop=0.1,
+    mconf = StarformerConfig(2, 1, vector_length = 208, patch_length = 16, context_length=30, pos_drop=0.1, resid_drop=0.1,
                           N_head=8, D=192, local_N_head=4, local_D=64, model_type='star', max_timestep=100, n_layer=6, maxT=10, 
                           action_type='continuous')
 
