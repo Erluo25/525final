@@ -1275,11 +1275,11 @@ def test2(args, render=False, rounds=1):
         env.close()
     return
 
-
+"""
 def test(args, render=False, rounds=1):
     from agent import Agent
     # Initialize the environment
-    agent = Agent(episode_num=100, gamma=0.9, a_lr=1e-5, c_lr=3e-5, batch_size=1024, batch_round=1,\
+    agent = Agent(episode_num=15000, gamma=0.9, a_lr=1e-5, c_lr=3e-5, batch_size=1024, batch_round=1,\
                     update_round=3, step_limit=100000, action_dim=2, \
                     action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=2048, input_dim=208,\
                     collision_weight=30, distance_weight=20, center_line_weight=1,\
@@ -1305,15 +1305,16 @@ def test(args, render=False, rounds=1):
                 test_end = True
                 env.close()
     return
+"""
 
 def a2c_train():
     from agent import Agent
 
-    agent = Agent(episode_num=30, gamma=0.95, a_lr=1e-5, c_lr=5e-5, batch_size=1024, batch_round=1,\
-                    update_round=5, step_limit=10000, action_dim=2, \
+    agent = Agent(episode_num=15000, gamma=0.9, a_lr=1e-5, c_lr=5e-5, batch_size=1024, batch_round=1,\
+                    update_round=5, step_limit=10000000, action_dim=2, \
                     action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=4096, input_dim=208,\
-                    collision_weight=3, distance_weight=5, center_line_weight=0.2,\
-                    render=True, round_precision=3, stuck_counter_limit=20)
+                    collision_weight=3, distance_weight=5, center_line_weight=0.5,\
+                    render=False, round_precision=3, stuck_counter_limit=20)
     #loaded_actor_dict = torch.load("./actor.pth")
     #agent.act_net.load_state_dict(loaded_actor_dict)
     #loaded_critic_dict = torch.load("./critic.pth")
