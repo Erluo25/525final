@@ -137,7 +137,7 @@ class StarAgent():
         while loop_end is False:
           
           step_count += 1
-          print("Step is:", step_count)
+          #print("Step is:", step_count)
           if step_count >= self.step_limit:
             loop_end = True
             continue

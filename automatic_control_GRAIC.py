@@ -1229,7 +1229,7 @@ class RACE_ENV():
             return state, reward, terminated, True
         
         truncation = False
-        rounded_dist = round(state[-1], self.round_precision)
+        rounded_dist = round(state[5], self.round_precision)
         if rounded_dist == self.prev_dist:
             self.stuck_counter += 1
             #print("Current stuck counter is: ", self.stuck_counter)
@@ -1252,7 +1252,7 @@ def test_plain(args, render=False, rounds=1):
     from agent import Agent1
     agent = Agent1()
     try:
-        env = RACE_ENV(args, collision_weight=30, distance_weight=20, center_line_weight=1, render=render, round_precision=3, stuck_counter_limit=20)
+        env = RACE_ENV(args, collision_weight=30, distance_weight=20, center_line_weight=1, render=render, round_precision=3, stuck_counter_limit=30)
         for i in range(0, rounds):
             print("Start round: ", i)
             state, info = env.reset()
