@@ -1324,7 +1324,7 @@ def a2c_train():
 
 def test_a2c_star_agent(args, render=True, rounds=1):
     from staragent import StarAgent 
-    agent = StarAgent(1000, 0.9, a_lr=1e-4, c_lr=5e-4, batch_size =16, batch_round=3,\
+    agent = StarAgent(10, 0.9, a_lr=1e-4, c_lr=5e-4, batch_size =16, batch_round=3,\
                       update_round=5, step_limit=10000000, action_dim=2, \
                       action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=50000, input_dim=208,\
                         collision_weight=3, distance_weight=5, center_line_weight=0.1,\
@@ -1391,7 +1391,7 @@ def test_a2c_star_agent(args, render=True, rounds=1):
 
 def a2c_star_train():
     from staragent import StarAgent 
-    agent = StarAgent(1000, 0.9, a_lr=1e-4, c_lr=5e-4, batch_size =16, batch_round=3,\
+    agent = StarAgent(10, 0.9, a_lr=1e-4, c_lr=5e-4, batch_size =16, batch_round=3,\
                       update_round=5, step_limit=10000000, action_dim=2, \
                       action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=50000, input_dim=208,\
                         collision_weight=3, distance_weight=5, center_line_weight=0.1,\
@@ -1427,10 +1427,10 @@ def main():
     try:
         # Triaining =================================================
         #a2c_train()
-        #a2c_star_train()
+        a2c_star_train()
 
         # Testing ===================================================
-        test_plain(args, render=True, rounds=20)
+        #test_plain(args, render=True, rounds=20)
         #test_a2c_agent(args, True, 10)
         #test_a2c_star_agent(args, True, 10)
         print('end of game loop')
