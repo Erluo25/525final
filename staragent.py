@@ -256,9 +256,9 @@ class StarAgent():
         self.training_reward_y.append(episode_reward)
         print("Episode ", i, " finish takes time: ", episode_duration,\
               " with reward: ", episode_reward)
-        if (i % 20 == 0):
-          torch.save(self.act_net.state_dict(), "./actor_str1.pth")
-          torch.save(self.critic_net.state_dict(), "./critic_str1.pth")
+        if (i % 30 == 0):
+          torch.save(self.act_net.state_dict(), "./actor_str.pth")
+          torch.save(self.critic_net.state_dict(), "./critic_str.pth")
           x = torch.tensor(self.training_reward_x)
           y = torch.tensor(self.training_reward_y)
           torch.save(x, 'tx_str.pt')
