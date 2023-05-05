@@ -76,6 +76,7 @@ class StarAgent():
     return control
   
   def forward_state(self, visiting_states, visiting_actions):
+    #print(visiting_states.size(), visiting_actions.size())
     act_net_result, _, _ = self.act_net(visiting_states, visiting_actions, None) 
     mean = act_net_result[..., :self.action_dim]
     cov_mat = act_net_result[..., self.action_dim:].view(-1, self.action_dim, self.action_dim)
@@ -135,19 +136,19 @@ class StarAgent():
           if step_count >= self.step_limit:
             loop_end = True
           
+          
           assert (visiting_states is None and visiting_actions is None) or \
-            (((visiting_states.size(0) == visiting_actions.size(0) + 1) or \
-              (visiting_states.size(0)==1 and visiting_actions is None))\
+            ((visiting_states.size(0) == visiting_actions.size(0))\
              and visiting_states.size(0) <=self.maxT), "Error stacking visiting states"
 
           if visiting_states is None:
             visiting_states = deepcopy(current_state)
           else:
             if visiting_states.size(0) == self.maxT:
-              assert visiting_actions.size(0) == self.maxT -1, "Max truncation error"
               visiting_states = visiting_states[1:, ...]
               visiting_actions = visiting_actions[1:, ...]
-              visiting_states = torch.vstack((visiting_states, current_state))
+            visiting_states = torch.vstack((visiting_states, current_state))
+          
           # Step the environment based on the selected action
           # Note: this action is on GPU and is a tensor
           # Add a dummpy action padding
@@ -329,6 +330,7 @@ class StarAgent():
     current_state_stack = torch.vstack(state_stack_list).view(batch_size, self.maxT, -1)
     next_state_stack = torch.vstack(next_state_stack_list).view(batch_size, self.maxT, -1)
     action_stack = torch.vstack(action_stack_list).view(batch_size, self.maxT, -1)
+    desired_action_stack = self.action_rb[select_batch_idxs, ...]
     done_list = self.done_list_rb[select_batch_idxs, ...].view(-1, 1)
     trans_reward = self.reward_rb[select_batch_idxs, ...].view(-1, 1)
 
@@ -387,10 +389,8 @@ class StarAgent():
     distribution = MultivariateNormal(mean, cov_mat) 
 
     # 3-3 Compute the log prob
-    log_prob = distribution.log_prob(action_stack.squeeze(0))
-    
+    log_prob = distribution.log_prob(desired_action_stack)  
     log_prob = log_prob.view(1, -1)#.to(torch.float64)
-    print(log_prob, a_value)
     # 3-4 Compute the multiplication with a_value
     dot_prod = -1 * (log_prob @ a_value)
 
