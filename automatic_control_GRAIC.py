@@ -1184,22 +1184,22 @@ class RACE_ENV():
         dist_to_center_line = compute_distance(mmc[0], mmc[1], [transform.location.x, transform.location.y])
 
         # Construct the reward
-        print("Progress is: ", progress)
+        #print("Progress is: ", progress)
         r1 = self.distance_weight * (progress) # The progress has been made
-        print("r1 is: ", r1)
+        #print("r1 is: ", r1)
         #print("Distance to center line is: ", dist_to_center_line)
         r2 = self.center_line_weight * (-1) * dist_to_center_line # distance to the center line
-        print("r2 is: ", r2)
+        #print("r2 is: ", r2)
         r3 = 0
         collision_happen_flag = False
         if self.hud.has_collision is not None:
             collision_happen_flag = True
             intensity = self.hud.has_collision[1]
-            print("Collision happens, intensity is: ", intensity)
+            #print("Collision happens, intensity is: ", intensity)
             r3 = self.collision_weight * (-1) * intensity
-            print("r3 is: ", r3)
+            #print("r3 is: ", r3)
         reward = r1 + r2 + r3
-        print("total reward is: ", reward)
+        #print("total reward is: ", reward)
         #print()
         # Return the desired objects
         return (filtered_obstacles, self.waypoints[self.idx:end_waypoints], vel, transform,\
