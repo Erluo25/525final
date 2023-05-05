@@ -157,13 +157,13 @@ class StarAgent():
             visiting_actions = torch.vstack((visiting_actions, torch.zeros(1, visiting_actions.size(1)).to(device)))
           
           # Convert the form of input
-          visiting_states = visiting_states.view(1, visiting_states.size(0), visiting_states.size(1))
-          visiting_actions = visiting_actions.view(1, visiting_actions.size(0), visiting_actions.size(1))
+          visiting_states = visiting_states.unsqueeze(0)#.view(1, visiting_states.size(0), visiting_states.size(1))
+          visiting_actions = visiting_actions.unsqueeze(0)#.view(1, visiting_actions.size(0), visiting_actions.size(1))
           action = self.sample_action_from_state_gaussian(visiting_states, visiting_actions)
           
           # Convert the forms back
-          visiting_states = visiting_states.view(visiting_states.size(1), -1)
-          visiting_actions = visiting_actions.view(visiting_actions.size(1), -1)
+          visiting_states = visiting_states.squeeze(0)#.view(visiting_states.size(1), -1)
+          visiting_actions = visiting_actions.squeeze(0)#.view(visiting_actions.size(1), -1)
           visiting_actions = visiting_actions[:-1, ...] # Throuw away the dummy action
           visiting_actions = torch.vstack((visiting_actions, action))
           assert visiting_states.size(0) == visiting_actions.size(0), "Visting states and actions are not eqaul"
@@ -250,7 +250,7 @@ class StarAgent():
         self.training_reward_y.append(episode_reward)
         print("Episode ", i, " finish takes time: ", episode_duration,\
               " with reward: ", episode_reward)
-        if (i % 100 == 0):
+        if (i % 50 == 0):
           torch.save(self.act_net.state_dict(), "./actor_str.pth")
           torch.save(self.critic_net.state_dict(), "./critic_str.pth")
           x = torch.tensor(self.training_reward_x)
@@ -381,17 +381,18 @@ class StarAgent():
     # 3. Use actor network to compute the log prob of the current_state, action pair
     
     # 3-1 Feed the group of trajs into the actor to get the mean and covariance
-    mean, cov_mat = self.forward_state(current_state_stack)
+    mean, cov_mat = self.forward_state(current_state_stack, action_stack)
 
     # 3-2 Construct the Gaussian distribution
     distribution = MultivariateNormal(mean, cov_mat) 
 
     # 3-3 Compute the log prob
-    log_prob = distribution.log_prob(action_stack)
+    log_prob = distribution.log_prob(action_stack.squeeze(0))
+    
     log_prob = log_prob.view(1, -1)#.to(torch.float64)
-
+    print(log_prob, a_value)
     # 3-4 Compute the multiplication with a_value
-    dot_prod = -1 * log_prob @ a_value
+    dot_prod = -1 * (log_prob @ a_value)
 
     # 3-5 Backprop and update gradients
     #self.act_net.zero_grad() 

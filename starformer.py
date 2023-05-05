@@ -323,7 +323,6 @@ class Starformer(nn.Module):
     
     def forward(self, states, actions, targets=None, rewards=None):
         # actions should be already padded by dataloader
-        print(states.size(), actions.size())
         local_tokens, global_state_tokens, temporal_emb = self.token_emb(states, actions, rewards=rewards)
         local_tokens = self.local_pos_drop(local_tokens)
         if ('xconv' not in self.config.model_type) and ('stack' not in self.config.model_type):
@@ -358,7 +357,7 @@ class Starformer(nn.Module):
         y = self.head(self.ln_head(global_state_tokens))
         loss = None
         if targets is not None:
-            loss = self.get_loss(y, targets)
+            loss = self.get_loss(y, targets) 
         return y[:, -1], (local_atts, global_atts), loss
     
 #------------------------------------------------------------------------
@@ -401,7 +400,7 @@ class TrainerConfig:
             setattr(self, k, v)
         
 if __name__ == "__main__":
-    mconf = StarformerConfig(2, 1, vector_length = 208, patch_length = 16, context_length=30, pos_drop=0.1, resid_drop=0.1,
+    mconf = StarformerConfig(2, 2 + 2 * 2, vector_length = 208, patch_length = 16, context_length=30, pos_drop=0.1, resid_drop=0.1,
                           N_head=8, D=192, local_N_head=4, local_D=64, model_type='star', max_timestep=100, n_layer=6, maxT=10, 
                           action_type='continuous')
 
@@ -410,9 +409,9 @@ if __name__ == "__main__":
 
     model = Starformer(mconf)
     model = model.cuda()
-    dummy_states = torch.randn(3, 10, 208).cuda()
+    dummy_states = torch.randn(1, 10, 208).cuda()
     #dummy_actions = torch.randint(0, 2, (3, 10, 1), dtype=torch.long).cuda()
-    dummy_actions = torch.randn(3, 10, 2).cuda()
+    dummy_actions = torch.randn(1, 10, 2).cuda()
     print(dummy_actions)
     
     #print(dummy_actions.reshape(-1, 1).size())
