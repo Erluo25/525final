@@ -32,11 +32,11 @@ class StarAgent():
     # Basic starformer configurations
     self.actor_config = StarformerConfig(action_dim, action_dim + action_dim * action_dim, vector_length = self.input_dim, patch_length = self.patch_length,
                          context_length=30, pos_drop=0.1, resid_drop=0.1,
-                          N_head=8, D=192, local_N_head=4, local_D=64, model_type='star', max_timestep=100, n_layer=6, maxT=10, 
+                          N_head=8, D=192, local_N_head=4, local_D=64, model_type='star', max_timestep=100, n_layer=4, maxT=self.maxT, 
                           action_type='continuous')
     self.critic_config = StarformerConfig_C(1, vector_length = input_dim, patch_length = self.patch_length, 
                         context_length=30, pos_drop=0.1, resid_drop=0.1,
-                          N_head=8, D=192, local_N_head=4, local_D=64, model_type='star', max_timestep=100, n_layer=6, maxT=10, 
+                          N_head=8, D=192, local_N_head=4, local_D=64, model_type='star', max_timestep=100, n_layer=4, maxT=self.maxT, 
                           action_type='continuous')
     self.actor_config_train = TrainerConfig(learning_rate=a_lr, lr_decay=True, maxT=self.maxT)
 
@@ -68,6 +68,8 @@ class StarAgent():
     self.render = render
     self.round_precision = round_precision
     self.stuck_counter_limit = stuck_counter_limit
+    self.tanh = nn.Tanh()
+    self.sigmoid = nn.Sigmoid()
   
   def run_step(self, state):
     result_state = convert_state_to_tensor(state)
@@ -79,7 +81,9 @@ class StarAgent():
     #print(visiting_states.size(), visiting_actions.size())
     act_net_result, _, _ = self.act_net(visiting_states, visiting_actions, None) 
     mean = act_net_result[..., :self.action_dim]
+    mean = self.action_bound * self.tanh(mean)
     cov_mat = act_net_result[..., self.action_dim:].view(-1, self.action_dim, self.action_dim)
+    cov_mat = self.sigmoid(cov_mat)
     transpose_cov_mat = cov_mat.transpose(1, 2)
     cov_mat = torch.bmm(cov_mat, transpose_cov_mat)
     id_mat = torch.eye(self.action_dim).repeat(cov_mat.size(0), 1, 1).to(device)

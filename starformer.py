@@ -247,7 +247,7 @@ class Starformer(nn.Module):
         self.ln_head = nn.LayerNorm(config.D)
         if 'continuous' in config.action_type:
             self.head = nn.Sequential(
-                    *([nn.Linear(config.D, config.output_dim)] + [nn.Tanh()])
+                    *([nn.Linear(config.D, config.output_dim)]) #+ [nn.Tanh()])
                 )
             #self.head = nn.Sequential(
             #        *([nn.Linear(config.D, config.vocab_size + config.vocab_size * config.vocab_size)] + [nn.Tanh()])
@@ -409,15 +409,22 @@ if __name__ == "__main__":
 
     model = Starformer(mconf)
     model = model.cuda()
-    dummy_states = torch.randn(1, 10, 208).cuda()
+    dummy_states1 = torch.randn(1, 10, 208).cuda()
+    dummy_states2 = torch.randn(1, 8, 208).cuda()
     #dummy_actions = torch.randint(0, 2, (3, 10, 1), dtype=torch.long).cuda()
-    dummy_actions = torch.randn(1, 10, 2).cuda()
-    print(dummy_actions)
+    dummy_actions1 = torch.randn(1, 10, 2).cuda()
+    dummy_actions2 = torch.randn(1, 8, 2).cuda()
+    #print(dummy_actions)
     
     #print(dummy_actions.reshape(-1, 1).size())
-    output, atn, loss = model(dummy_states, dummy_actions, None)
+    output, atn, loss = model(dummy_states1, dummy_actions1, None)
     print (output.size(), output)
 
+
+    #output, atn, loss = model([dummy_states1, dummy_states2], [dummy_actions1, dummy_actions2], None)
+    #print (output.size(), output)
+
+    
     #dummy_states = torch.randn(3, 1, 4, 84, 84).cuda()
     #dummy_actions = torch.randint(0, 4, (3, 1, 1), dtype=torch.long).cuda()
     #output, atn, loss = model(dummy_states, dummy_actions, None)
