@@ -141,7 +141,11 @@ class World(object):
         while self.player is None:
             # TODO: Hardcoded starting point, to be changed to 1st wp in waypoint pickle file
             if args.map == 'shanghai_intl_circuit':
-                spawn_point = carla.Transform(carla.Location(90.0, 93.0, 1.0), carla.Rotation(0, 0, 0))
+                lower = - 1
+                upper = 1
+                x = random.uniform(lower, upper)
+                y = random.uniform(lower, upper)
+                spawn_point = carla.Transform(carla.Location(90.0 + x, 93.0 + y, 1.0), carla.Rotation(0, 0, 0))
             elif args.map == 't1_triple':
                 spawn_point = carla.Transform(carla.Location(153.0, -12.0, 1.0), carla.Rotation(0, 180, 0))
             elif args.map == 't2_triple':
@@ -1180,7 +1184,7 @@ def a2c_star_train():
                       update_round=5, step_limit=10000000, action_dim=2, \
                       action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=50000, input_dim=208,\
                         collision_weight=3, distance_weight=5, center_line_weight=0.1,\
-                        render=False, round_precision=3, stuck_counter_limit=20, maxT=5, patch_length=16)
+                        render=False, round_precision=1, stuck_counter_limit=30, maxT=5, patch_length=16)
     #loaded_actor_dict = torch.load("./actor_str.pth")
     #agent.act_net.load_state_dict(loaded_actor_dict)
     #loaded_critic_dict = torch.load("./critic_str.pth")
@@ -1215,7 +1219,7 @@ def main():
         a2c_star_train()
 
         # Testing ===================================================
-        #test_plain(args, render=True, rounds=20)
+        #test_plain(args, render=True, rounds=30)
         #test_a2c_agent(args, True, 10)
         #test_a2c_star_agent(args, True, 10)
         print('end of game loop')
