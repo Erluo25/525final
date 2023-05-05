@@ -152,7 +152,8 @@ def get_control_from_action(action):
   steer = action.item(0)
   #print("Steer type is: ", type(steer))
   control.steer = steer
-
+  contorl.throttle = 0.1
+  """
   acc = action.item(1)
   if acc > 0:
     control.throttle = acc
@@ -160,5 +161,6 @@ def get_control_from_action(action):
   else:
     control.throttle = 0
     control.brake = -acc
-  
+  """
+
   return control

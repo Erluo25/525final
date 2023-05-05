@@ -1027,7 +1027,7 @@ class RACE_ENV():
         if self.stuck_counter == self.stuck_counter_limit: # Allows stucking at the same position for 50 times
             #print("Already stuck for", self.stuck_counter_limit, " times")
             truncation = True
-            reward -= 10000
+            reward -= 100
         return state, reward, terminated, truncation
         
 #===============================================================================
@@ -1180,15 +1180,15 @@ def test_a2c_star_agent(args, render=True, rounds=1):
 
 def a2c_star_train():
     from staragent import StarAgent 
-    agent = StarAgent(2000, 0.9, a_lr=1e-4, c_lr=5e-4, batch_size =16, batch_round=3,\
-                      update_round=5, step_limit=10000000, action_dim=2, \
+    agent = StarAgent(2000, 0.95, a_lr=1e-4, c_lr=5e-4, batch_size =16, batch_round=1,\
+                      update_round=5, step_limit=10000, action_dim=2, \
                       action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=50000, input_dim=208,\
-                        collision_weight=3, distance_weight=5, center_line_weight=0.1,\
+                        collision_weight=3, distance_weight=8, center_line_weight=0.5,\
                         render=False, round_precision=1, stuck_counter_limit=30, maxT=5, patch_length=16)
-    #loaded_actor_dict = torch.load("./actor_str.pth")
-    #agent.act_net.load_state_dict(loaded_actor_dict)
-    #loaded_critic_dict = torch.load("./critic_str.pth")
-    #agent.critic_net.load_state_dict(loaded_critic_dict)
+    loaded_actor_dict = torch.load("./actor_str.pth")
+    agent.act_net.load_state_dict(loaded_actor_dict)
+    loaded_critic_dict = torch.load("./critic_str.pth")
+    agent.critic_net.load_state_dict(loaded_critic_dict)
     agent.train()
     torch.save(agent.act_net.state_dict(), "./actor_str.pth")
     torch.save(agent.critic_net.state_dict(), "./critic_str.pth")
@@ -1196,8 +1196,31 @@ def a2c_star_train():
     #plot(agent.training_reward_x, agent.training_reward_y, "Cumulative reward", fn="./cumulative_reward.png", shown=True)
     x = torch.tensor(agent.training_reward_x)
     y = torch.tensor(agent.training_reward_y)
-    torch.save(x, 'tx_str.pt')
-    torch.save(y, 'ty_str.pt')
+    torch.save(x, 'tx_str1.pt')
+    torch.save(y, 'ty_str1.pt')
+
+    return
+
+def a2c_star_train_only_steer():
+    from staragent import StarAgent 
+    agent = StarAgent(500, 0.95, a_lr=1e-4, c_lr=5e-4, batch_size =16, batch_round=1,\
+                      update_round=5, step_limit=10000, action_dim=1, \
+                      action_bound=torch.tensor([math.pi / 6]).to(device), rb_max=50000, input_dim=208,\
+                        collision_weight=3, distance_weight=8, center_line_weight=0.5,\
+                        render=False, round_precision=3, stuck_counter_limit=30, maxT=5, patch_length=16)
+    loaded_actor_dict = torch.load("./actor_str1.pth")
+    agent.act_net.load_state_dict(loaded_actor_dict)
+    loaded_critic_dict = torch.load("./critic_str1.pth")
+    agent.critic_net.load_state_dict(loaded_critic_dict)
+    agent.train()
+    torch.save(agent.act_net.state_dict(), "./actor_str1.pth")
+    torch.save(agent.critic_net.state_dict(), "./critic_str1.pth")
+    #print(agent.training_reward_x, agent.training_reward_y)
+    #plot(agent.training_reward_x, agent.training_reward_y, "Cumulative reward", fn="./cumulative_reward.png", shown=True)
+    x = torch.tensor(agent.training_reward_x)
+    y = torch.tensor(agent.training_reward_y)
+    torch.save(x, 'tx_str1.pt')
+    torch.save(y, 'ty_str1.pt')
 
     return
 #===============================================================================

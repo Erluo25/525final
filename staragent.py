@@ -232,7 +232,7 @@ class StarAgent():
               self.action_rb = self.action_rb[-self.rb_max:]
               self.done_list_rb = self.done_list_rb[-self.rb_max:]
               self.reward_rb = self.reward_rb[-self.rb_max:]
-              self.index_rb = self.index_rb[-self.index_rb]
+              self.index_rb = self.index_rb[-self.rb_max:]
               self.rb_size = self.rb_max
               assert self.current_state_rb.size(0) == self.rb_size,\
                   "Resizing replay buffer error."
@@ -257,12 +257,12 @@ class StarAgent():
         print("Episode ", i, " finish takes time: ", episode_duration,\
               " with reward: ", episode_reward)
         if (i % 30 == 0):
-          torch.save(self.act_net.state_dict(), "./actor_str.pth")
-          torch.save(self.critic_net.state_dict(), "./critic_str.pth")
+          torch.save(self.act_net.state_dict(), "./actor_str1.pth")
+          torch.save(self.critic_net.state_dict(), "./critic_str1.pth")
           x = torch.tensor(self.training_reward_x)
           y = torch.tensor(self.training_reward_y)
-          torch.save(x, 'tx_str.pt')
-          torch.save(y, 'ty_str.pt')
+          torch.save(x, 'tx_str1.pt')
+          torch.save(y, 'ty_str1.pt')
 
       print("Total training time is: ", total_train_time)
     finally:
