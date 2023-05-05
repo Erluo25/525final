@@ -514,8 +514,6 @@ class CollisionSensor(object):
         
         if event.other_actor.id not in self.prev_collision_actor_id:
             self.prev_collision_actor_id.append(event.other_actor.id)
-            #with open("{}_collision.txt".format(self.args.map), 'a') as f:
-            #    f.write("Time: {}, Collision Actor ID: {}, Collision Actor Type: {}\n".format(round(event.timestamp, 2), event.other_actor.id, event.other_actor.type_id))
 
 # ==============================================================================
 # -- LaneInvasionSensor --------------------------------------------------------
@@ -804,8 +802,6 @@ def game_loop(args):
                     hud.notification("Score: " + str(round(total_score, 1)), 3)
                     print("Lap Done")
                     print("Final Score is ", total_score)
-                    #with open("{}_score.txt".format(args.map), 'w') as f:
-                    #    f.write(str(round(total_score, 2)))
                     idx = 0
                     break
                 
@@ -1011,7 +1007,7 @@ class RACE_ENV():
                 self.err = "Can not terminate at start"
                 print(self.err)
                 return None, self.err
-            self.prev_dist = round(state[-1], self.round_precision)
+            self.prev_dist = round(state[5], self.round_precision)
             self.stuck_counter = 0
             return state, None
 
