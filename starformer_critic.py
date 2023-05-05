@@ -9,14 +9,14 @@ import torch.nn.functional as F
 from timm.models.layers import trunc_normal_
 
 
-class GELU(nn.Module):
+class GELU_C(nn.Module):
     def __init__(self):
         super().__init__()
         
     def forward(self, input):
         return F.gelu(input) 
 
-class CausalSelfAttention(nn.Module):
+class CausalSelfAttention_C(nn.Module):
     def __init__(self, config, N_head=6, D=128, T=30):
         super().__init__()
         assert D % N_head == 0
@@ -33,6 +33,7 @@ class CausalSelfAttention(nn.Module):
         self.resd_drop = nn.Dropout(config.resid_pdrop)
         
         self.proj = nn.Linear(D, D)
+    
     def forward(self, x, mask=None):
         # x: B * N * D
         B, N, D = x.size()
@@ -52,97 +53,50 @@ class CausalSelfAttention(nn.Module):
 
 
     
-class PatchEmb(nn.Module):
+class PatchEmb_C(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
         D, iD = config.D, config.local_D
         vp = config.patch_length
 
-        #p1, p2 = config.patch_size
-        #c, h, w = config.img_size
-
         maxt = config.maxT
 
         self.patch_embedding = nn.Sequential(
             Rearrange('b t (v1 v) -> (b t) v1 v', v = vp),
             nn.Linear(vp, iD)
-        )
-
-        #self.patch_embedding = nn.Sequential(
-        #    Rearrange('b t c (h p1) (w p2) -> (b t) (h w) (p1 p2 c)', p1 = p1, p2 = p2),
-        #    nn.Linear(p1*p2*c, iD)
-        #)
-        
-        if 'continuous' in config.action_type:
-            self.action_emb = nn.Sequential(nn.Linear(config.vocab_size, iD), nn.Tanh())
-            #print(self.action_emb)
-        else:
-            # +1 for mask
-            self.action_emb = nn.Embedding(config.vocab_size+1, iD)
-        
-        if 'rwd' in config.model_type:
-              self.reward_emb = nn.Sequential(nn.Linear(1, iD), nn.Tanh())
-        
-        #self.spatial_emb = nn.Parameter(torch.zeros(1, h*w//p1//p2, iD))     
+        )    
         
         self.temporal_emb = nn.Parameter(torch.zeros(1, maxt, D))
         if 'xconv' not in config.model_type:
             self.linear_emb = nn.Sequential(nn.Linear(208, 1024), nn.ReLU(), nn.Linear(1024, 256), nn.ReLU(),
                                             nn.Linear(256, D), nn.Tanh())
-            #if 'vit' in config.model_type:
-            #    self.conv_emb = nn.Sequential(
-            #                Rearrange('bt c (h p1) (w p2) -> bt (h w) (p1 p2 c)', p1 = p1, p2 = p2),
-            #                nn.Linear(p1*p2*c, iD),
-            #                Rearrange('b n c -> b (n c)'),
-            #                nn.Linear(h*w//p1//p2*iD, D),
-            #                nn.Tanh()
-            #            )
-            #else:
-            #    self.linear_emb = nn.Sequential(nn.Linear(208, 1024), nn.ReLU(), nn.Linear(1024, 256), nn.ReLU(),
-            #                                    nn.Linear(256, D), nn.Tanh())
-            #    
-            #    self.conv_emb = nn.Sequential(nn.Conv2d(4, 32, 8, stride=4, padding=0), nn.ReLU(),
-            #                             nn.Conv2d(32, 64, 4, stride=2, padding=0), nn.ReLU(),
-            #                             nn.Conv2d(64, 64, 3, stride=1, padding=0), nn.ReLU(),
-            #                             nn.Flatten(), nn.Linear(3136, D), nn.Tanh())
     
     @torch.jit.ignore
     def no_weight_decay(self):
         return {'spatial_emb', 'temporal_emb'}
     
-    def forward(self, states, actions, rewards=None):
+    def forward(self, states):#, actions, rewards=None):
         #B, T, C, H, W = states.size()
         B, T, V = states.size()
-        #local_state_tokens = (self.patch_embedding(states) + self.spatial_emb).reshape(B, T, -1, self.config.local_D)
         local_state_tokens = (self.patch_embedding(states)).reshape(B, T, -1, self.config.local_D)
+
         if 'xconv' in self.config.model_type or 'stack' in self.config.model_type:
             global_state_tokens = 0
         else:
             global_state_tokens = self.linear_emb(states.reshape(-1, V)).reshape(B, T, -1) + self.temporal_emb[:, :T]
-            #global_state_tokens = self.conv_emb(states.reshape(-1, C, H, W)).reshape(B, T, -1) + self.temporal_emb[:, :T]
-        #print(actions.size())
-        if 'continuous' in self.config.action_type:
-            local_action_tokens = self.action_emb(actions.reshape(-1, self.config.vocab_size)).reshape(B, T, -1).unsqueeze(2) # B T 1 iD
-        else:
-            local_action_tokens = self.action_emb(actions.reshape(-1, 1)).reshape(B, T, -1).unsqueeze(2) # B T 1 iD
-
-        if 'rwd' in self.config.model_type:
-            local_reward_tokens = self.reward_emb(rewards.reshape(-1, 1)).reshape(B, T, -1).unsqueeze(2)
-            local_tokens = torch.cat((local_action_tokens, local_state_tokens, local_reward_tokens), dim=2)
-        else:
-            local_tokens = torch.cat((local_action_tokens, local_state_tokens), dim=2)
-        return local_tokens, global_state_tokens, self.temporal_emb[:, :T]
+            
+        return local_state_tokens, global_state_tokens, self.temporal_emb[:, :T]
     
-class _SABlock(nn.Module):
+class _SABlock_C(nn.Module):
     def __init__(self, config, N_head, D):
         super().__init__()
         self.ln1 = nn.LayerNorm(D)
         self.ln2 = nn.LayerNorm(D)
-        self.attn = CausalSelfAttention(config, N_head=N_head, D=D)
+        self.attn = CausalSelfAttention_C(config, N_head=N_head, D=D)
         self.mlp = nn.Sequential(
                 nn.Linear(D, 4*D),
-                GELU(),
+                GELU_C(),
                 nn.Linear(4*D, D),
                 nn.Dropout(config.resid_pdrop)
             )
@@ -155,7 +109,7 @@ class _SABlock(nn.Module):
         return x, att
     
     
-class SABlock(nn.Module):
+class SABlock_C(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
@@ -164,11 +118,8 @@ class SABlock(nn.Module):
         v = config.vector_length
         patch_count = v // vp
 
-        #p1, p2 = config.patch_size
-        #c, h, w = config.img_size
-        #patch_count = h*w//p1//p2
-        self.local_block = _SABlock(config, config.local_N_head, config.local_D)
-        self.global_block = _SABlock(config, config.N_head, config.D)
+        self.local_block = _SABlock_C(config, config.local_N_head, config.local_D)
+        self.global_block = _SABlock_C(config, config.N_head, config.D)
         if 'fusion' in config.model_type:
             self.register_buffer("mask", torch.tril(torch.ones(config.maxT*2, config.maxT*2))
                                      .view(1, 1, config.maxT*2, config.maxT*2))
@@ -179,16 +130,11 @@ class SABlock(nn.Module):
                 self.mask[0, 0, i, i-1] = 1.
         self.local_norm = nn.LayerNorm(config.local_D)
         if 'stack' not in config.model_type:
-            if 'rwd' in config.model_type:
-                self.local_global_proj = nn.Sequential(
-                    nn.Linear((patch_count+1+1)*config.local_D, config.D), # +1 for action token +1 for reward token
-                    nn.LayerNorm(config.D)
-                )
-            else:
-                self.local_global_proj = nn.Sequential(
-                        nn.Linear((patch_count+1)*config.local_D, config.D), # +1 for action token
+            self.local_global_proj = nn.Sequential(
+                        nn.Linear((patch_count)*config.local_D, config.D),
                         nn.LayerNorm(config.D)
                 )
+                
         
         
     def forward(self, local_tokens, global_tokens, temporal_emb=None):
@@ -212,7 +158,7 @@ class SABlock(nn.Module):
                 
                 
     
-class Starformer(nn.Module):
+class Starformer_C(nn.Module):
     
     def __init__(self, config):
         super().__init__()
@@ -221,14 +167,11 @@ class Starformer(nn.Module):
         D, iD = config.D, config.local_D
         vp = config.patch_length
         v = config.vector_length
-        #p1, p2 = config.patch_size
-        #c, h, w = config.img_size
-        #patch_count = h*w//p1//p2
         patch_count = v // vp
         maxt = config.maxT
         
-        self.token_emb = PatchEmb(config)
-        self.blocks = nn.ModuleList([SABlock(config) for _ in range(config.n_layer)])
+        self.token_emb = PatchEmb_C(config)
+        self.blocks = nn.ModuleList([SABlock_C(config) for _ in range(config.n_layer)])
         
         self.local_pos_drop = nn.Dropout(config.pos_drop)
         self.global_pos_drop = nn.Dropout(config.pos_drop)
@@ -245,16 +188,11 @@ class Starformer(nn.Module):
                 )
         
         self.ln_head = nn.LayerNorm(config.D)
-        if 'continuous' in config.action_type:
-            self.head = nn.Sequential(
+        
+        self.head = nn.Sequential(
                     *([nn.Linear(config.D, config.output_dim)] + [nn.Tanh()])
                 )
-            #self.head = nn.Sequential(
-            #        *([nn.Linear(config.D, config.vocab_size + config.vocab_size * config.vocab_size)] + [nn.Tanh()])
-            #    )
-        else:
-            #self.head = nn.Linear(config.D, config.vocab_size)
-            self.head = nn.Linear(config.D, config.output_dim)
+        
         self.apply(self._init_weights)
         
         print("number of parameters: %d" % sum(p.numel() for p in self.parameters()))
@@ -286,7 +224,6 @@ class Starformer(nn.Module):
                     # weights of blacklist modules will NOT be weight decayed
                     no_decay.add(fpn)
 
-        #no_decay.add('token_emb.spatial_emb')
         no_decay.add('token_emb.temporal_emb')
 
         # validate that we considered every parameter
@@ -321,10 +258,10 @@ class Starformer(nn.Module):
             return F.cross_entropy(pred.reshape(-1, pred.size(-1)), target.reshape(-1), reduction='none')
 
     
-    def forward(self, states, actions, targets=None, rewards=None):
+    def forward(self, states, targets=None, rewards=None):
         # actions should be already padded by dataloader
 
-        local_tokens, global_state_tokens, temporal_emb = self.token_emb(states, actions, rewards=rewards)
+        local_tokens, global_state_tokens, temporal_emb = self.token_emb(states)
         local_tokens = self.local_pos_drop(local_tokens)
         if ('xconv' not in self.config.model_type) and ('stack' not in self.config.model_type):
             global_state_tokens = self.global_pos_drop(global_state_tokens)
@@ -364,22 +301,18 @@ class Starformer(nn.Module):
 #------------------------------------------------------------------------
     
         
-class StarformerConfig:
+class StarformerConfig_C:
     embd_pdrop = 0.1
     resid_pdrop = 0.1
     attn_pdrop = 0.1
-    action_type = "discrete"
+    action_type = "continuous"
 
-    def __init__(self, vocab_size, output_dim, **kwargs):
-        self.vocab_size = vocab_size
+    def __init__(self, output_dim, **kwargs):
         self.output_dim = output_dim
         for k,v in kwargs.items():
             setattr(self, k, v)
         assert self.vector_length is not None and self.patch_length is not None
-        #assert self.img_size is not None and self.patch_size is not None
         assert self.D % self.N_head == 0
-        #C, H, W = self.img_size
-        #pH, pW = self.patch_size
 
 class TrainerConfig:
     # optimization parameters, will be overried by given actual parameters
@@ -401,22 +334,16 @@ class TrainerConfig:
             setattr(self, k, v)
         
 if __name__ == "__main__":
-    mconf = StarformerConfig(2, 1, vector_length = 208, patch_length = 16, context_length=30, pos_drop=0.1, resid_drop=0.1,
+    mconf = StarformerConfig_C(1, vector_length = 208, patch_length = 16, context_length=30, pos_drop=0.1, resid_drop=0.1,
                           N_head=8, D=192, local_N_head=4, local_D=64, model_type='star', max_timestep=100, n_layer=6, maxT=10, 
                           action_type='continuous')
 
-    #mconf = StarformerConfig(4, img_size = (4, 84, 84), patch_size = (7, 7), context_length=30, pos_drop=0.1, resid_drop=0.1,
-    #                      N_head=8, D=192, local_N_head=4, local_D=64, model_type='star', max_timestep=100, n_layer=6, C=4, maxT=30)
-
-    model = Starformer(mconf)
+    model = Starformer_C(mconf)
     model = model.cuda()
     dummy_states = torch.randn(3, 10, 208).cuda()
-    #dummy_actions = torch.randint(0, 2, (3, 10, 1), dtype=torch.long).cuda()
-    dummy_actions = torch.randn(3, 10, 2).cuda()
-    print(dummy_actions)
     
     #print(dummy_actions.reshape(-1, 1).size())
-    output, atn, loss = model(dummy_states, dummy_actions, None)
+    output, atn, loss = model(dummy_states)
     print (output.size(), output)
 
     #dummy_states = torch.randn(3, 1, 4, 84, 84).cuda()

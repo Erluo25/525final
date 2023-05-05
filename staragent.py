@@ -4,9 +4,10 @@ import time
 #from automatic_control_GRAIC import RACE_ENV
 from utils import *
 from starformer import *
+from starformer_critic import *
 from automatic_control_GRAIC import RACE_ENV
 
-class Agent():
+class StarAgent():
   def __init__(self, episode_num, gamma, a_lr, c_lr, batch_size,\
                batch_round, update_round, step_limit,\
                action_dim, action_bound, rb_max, input_dim,\
@@ -33,7 +34,7 @@ class Agent():
                          context_length=30, pos_drop=0.1, resid_drop=0.1,
                           N_head=8, D=192, local_N_head=4, local_D=64, model_type='star', max_timestep=100, n_layer=6, maxT=10, 
                           action_type='continuous')
-    self.critic_config = StarformerConfig(action_dim, 1, vector_length = input_dim, patch_length = self.patch_length, 
+    self.critic_config = StarformerConfig_C(1, vector_length = input_dim, patch_length = self.patch_length, 
                         context_length=30, pos_drop=0.1, resid_drop=0.1,
                           N_head=8, D=192, local_N_head=4, local_D=64, model_type='star', max_timestep=100, n_layer=6, maxT=10, 
                           action_type='continuous')
@@ -43,7 +44,7 @@ class Agent():
     
     # Actor and Critic networks setup and loss function for ciritc network
     self.act_net = Starformer(self.actor_config).to(device)
-    self.critic_net = Starformer(self.critic_config).to(device)
+    self.critic_net = Starformer_C(self.critic_config).to(device)
 
     self.actor_optimizer = self.act_net.configure_optimizers(self.actor_config_train)
     self.critic_optimizer = self.critic_net.configure_optimizers(self.critic_config_train)
@@ -74,8 +75,8 @@ class Agent():
     control = get_control_from_action(action)
     return control
   
-  def forward_state(self, state):
-    act_net_result = self.act_net(state) 
+  def forward_state(self, visiting_states, visiting_actions):
+    act_net_result = self.act_net(visiting_states, visiting_actions, None) 
     mean = act_net_result[..., :self.action_dim]
     cov_mat = act_net_result[..., self.action_dim:].view(-1, self.action_dim, self.action_dim)
     transpose_cov_mat = cov_mat.transpose(1, 2)
@@ -84,9 +85,9 @@ class Agent():
     cov_mat = cov_mat + id_mat
     return mean, cov_mat
   
-  def sample_action_from_state_gaussian(self, state):
+  def sample_action_from_state_gaussian(self, visiting_states, visiting_actions):
     state = state.to(torch.float32)
-    mean, cov_mat = self.forward_state(state)
+    mean, cov_mat = self.forward_state(visiting_states, visiting_actions)
     mean = mean.detach()
     cov_mat = cov_mat.detach()
 
@@ -122,6 +123,10 @@ class Agent():
         current_state, info = env.reset()
         current_state = convert_state_to_tensor(current_state)
 
+        visiting_states = None
+        visiting_actions = None
+        input_counter = 0
+
         step_count = 0
         loop_end = False
         while loop_end is False:
@@ -129,11 +134,34 @@ class Agent():
           step_count += 1
           if step_count >= self.step_limit:
             loop_end = True
+          
+          assert (visiting_states is None and visiting_actions is None) or \
+            (((visiting_states.view(0) == visiting_actions.view(0) + 1) or \
+              (visiting_states.view(0)==1 and visiting_actions is None))\
+             and visiting_states.view(0) <=self.maxT), "Error stacking visiting states"
 
+          if visiting_states is None:
+            visiting_states = deepcopy(current_state)
+          else:
+            if visiting_states.view(0) == self.maxT:
+              assert visiting_actions.view(0) == self.maxT -1, "Max truncation error"
+              visiting_states = visiting_states[1:, ...]
+              visiting_actions = visiting_actions[1:, ...]
+              visiting_states = torch.vstack((visiting_states, current_state))
           # Step the environment based on the selected action
           # Note: this action is on GPU and is a tensor
-          action = self.sample_action_from_state_gaussian(current_state)
+          # Add a dummpy action padding
+          if visiting_actions is None:
+            visiting_actions = torch.zeros(1, self.action_dim).to(device)
+          else:
+            visiting_actions = torch.vstack((visiting_actions, torch.zeros(1, visiting_actions.view(1)).to(device)))
           
+          action = self.sample_action_from_state_gaussian(visiting_states, visiting_actions)
+          
+          visiting_actions = visiting_actions[:-1, ...] # Throuw away the dummy action
+          visiting_actions = torch.vstack((visiting_actions, action))
+          assert visiting_states.size(0) == visiting_actions.size(0), "Visting states and actions are not eqaul"
+        
           # Convert the action to control object before stepping.
           control = get_control_from_action(action)
           
@@ -289,6 +317,7 @@ class Agent():
           state_stack_list.append(torch.zeros(pad_num, self.current_state_rb.size(1)).to(device))
           next_state_stack_list.append(torch.zeros(pad_num, self.next_state_rb.size(1)).to(device))
           action_stack_list.append(torch.zeros(pad_num, self.action_rb.size(1)).to(device))
+
     
     # Combine the stack lists
     current_state_stack = torch.vstack(state_stack_list).view(self.batch_size, self.maxT, -1)
@@ -366,25 +395,3 @@ class Agent():
     #    param += self.act_net.lr * torch.clip(param.grad, -1, 1)
     # Done with the single batch update
     return
-    
-"""
-if __name__ == "__main__":
-    #env = RACE_ENV(args, collision_weight=30, distance_weight=5, center_line_weight=5, render=False, round_precision=2, stuck_counter_limit=15)
-      
-    act_net = Actor_Net_Num(action_dim=2, action_bound=torch.tensor([math.pi / 6, 6]).to(device), lr=0.01, \
-                                 input_dim = 356).to(device)
-    #loaded_state_dict = torch.load("./actor.pth")
-    #act_net.load_state_dict(loaded_state_dict)
-
-    input = torch.randn((356)).to(device)
-    print("input size is: ", input.size())
-    m, c = act_net(input)
-    print(m, c)
-    a = act_net.sample_action_from_state_gaussian(input)
-    print("action is: ", a)
-    a = convert_action_type(a)
-    print(a[0])
-    
-    #torch.save(act_net.state_dict(), "./actor.pth")
-    print()
-"""
