@@ -137,9 +137,10 @@ class StarAgent():
         while loop_end is False:
           
           step_count += 1
+          print("Step is:", step_count)
           if step_count >= self.step_limit:
             loop_end = True
-          
+            continue
           
           assert (visiting_states is None and visiting_actions is None) or \
             ((visiting_states.size(0) == visiting_actions.size(0))\
@@ -255,7 +256,7 @@ class StarAgent():
         self.training_reward_y.append(episode_reward)
         print("Episode ", i, " finish takes time: ", episode_duration,\
               " with reward: ", episode_reward)
-        if (i % 50 == 0):
+        if (i % 10 == 0):
           torch.save(self.act_net.state_dict(), "./actor_str.pth")
           torch.save(self.critic_net.state_dict(), "./critic_str.pth")
           x = torch.tensor(self.training_reward_x)
@@ -265,7 +266,7 @@ class StarAgent():
 
       print("Total training time is: ", total_train_time)
     finally:
-      env.close()
+        env.close()
     return
 
 

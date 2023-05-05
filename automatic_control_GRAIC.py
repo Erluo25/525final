@@ -65,9 +65,6 @@ except IndexError:
 #import carla
 from carla import ColorConverter as cc
 
-
-
-
 # ==============================================================================
 # -- Global functions ----------------------------------------------------------
 # ==============================================================================
@@ -1191,22 +1188,22 @@ class RACE_ENV():
         dist_to_center_line = compute_distance(mmc[0], mmc[1], [transform.location.x, transform.location.y])
 
         # Construct the reward
-        #print("Progress is: ", progress)
+        print("Progress is: ", progress)
         r1 = self.distance_weight * (progress) # The progress has been made
-        #print("r1 is: ", r1)
+        print("r1 is: ", r1)
         #print("Distance to center line is: ", dist_to_center_line)
         r2 = self.center_line_weight * (-1) * dist_to_center_line # distance to the center line
-        #print("r2 is: ", r2)
+        print("r2 is: ", r2)
         r3 = 0
         collision_happen_flag = False
         if self.hud.has_collision is not None:
             collision_happen_flag = True
             intensity = self.hud.has_collision[1]
-            #print("Collision happens, intensity is: ", intensity)
+            print("Collision happens, intensity is: ", intensity)
             r3 = self.collision_weight * (-1) * intensity
-            #print("r3 is: ", r3)
+            print("r3 is: ", r3)
         reward = r1 + r2 + r3
-        #print("total reward is: ", reward)
+        print("total reward is: ", reward)
         #print()
         # Return the desired objects
         return (filtered_obstacles, self.waypoints[self.idx:end_waypoints], vel, transform,\
@@ -1251,7 +1248,7 @@ class RACE_ENV():
 #===============================================================================
 # ------------ testing with some agent  ----------------------------------------
 #===============================================================================
-def test2(args, render=False, rounds=1):
+def test_plain(args, render=False, rounds=1):
     from agent import Agent1
     agent = Agent1()
     try:
@@ -1275,37 +1272,35 @@ def test2(args, render=False, rounds=1):
         env.close()
     return
 
-"""
-def test(args, render=False, rounds=1):
+
+def test_a2c_agent(args, render=False, rounds=1):
     from agent import Agent
     # Initialize the environment
-    agent = Agent(episode_num=15000, gamma=0.9, a_lr=1e-5, c_lr=3e-5, batch_size=1024, batch_round=1,\
+    agent = Agent(episode_num=1, gamma=0.9, a_lr=1e-5, c_lr=3e-5, batch_size=1024, batch_round=1,\
                     update_round=3, step_limit=100000, action_dim=2, \
                     action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=2048, input_dim=208,\
                     collision_weight=30, distance_weight=20, center_line_weight=1,\
                     render=False, round_precision=3, stuck_counter_limit=20)
     loaded_state_dict = torch.load("./actor.pth")
     agent.act_net.load_state_dict(loaded_state_dict)
-
-    for _ in range(0, rounds):
-        
+    try:
         env = RACE_ENV(args, collision_weight=30, distance_weight=5, center_line_weight=5, render=render, round_precision=4, stuck_counter_limit=100)
-        state, info = env.reset()
-
-        if info is not None:
-            print("Testing: error environment reset")
-            return
-        test_end = False
-        while test_end is False:
-            control = agent.run_step(state)
-            state, reward, terminated, truncation = env.step(control)
-            #print("Reward is: ", reward)
-            if terminated or truncation:
-                #print("Meet termination or truncation")
-                test_end = True
-                env.close()
+        for _ in range(0, rounds):
+            state, info = env.reset()
+            if info is not None:
+                print("Testing: error environment reset")
+                return
+            test_end = False
+            while test_end is False:
+                control = agent.run_step(state)
+                state, reward, terminated, truncation = env.step(control)
+                #print("Reward is: ", reward)
+                if terminated or truncation:
+                    #print("Meet termination or truncation")
+                    test_end = True
+    finally:
+        env.close()
     return
-"""
 
 def a2c_train():
     from agent import Agent
@@ -1314,34 +1309,101 @@ def a2c_train():
                     update_round=5, step_limit=10000000, action_dim=2, \
                     action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=50000, input_dim=208,\
                     collision_weight=3, distance_weight=5, center_line_weight=0.5,\
-                    render=False, round_precision=3, stuck_counter_limit=20)
+                    render=False, round_precision=2, stuck_counter_limit=20)
     loaded_actor_dict = torch.load("./actor.pth")
     agent.act_net.load_state_dict(loaded_actor_dict)
     loaded_critic_dict = torch.load("./critic.pth")
     agent.critic_net.load_state_dict(loaded_critic_dict)
     agent.train()
-    torch.save(agent.act_net.state_dict(), "./actor.pth")
-    torch.save(agent.critic_net.state_dict(), "./critic.pth")
+    torch.save(agent.act_net.state_dict(), "./actor1.pth")
+    torch.save(agent.critic_net.state_dict(), "./critic1.pth")
     #print(agent.training_reward_x, agent.training_reward_y)
     #plot(agent.training_reward_x, agent.training_reward_y, "Cumulative reward", fn="./cumulative_reward.png", shown=True)
     x = torch.tensor(agent.training_reward_x)
     y = torch.tensor(agent.training_reward_y)
-    torch.save(x, 'tx.pt')
-    torch.save(y, 'ty.pt')
+    torch.save(x, 'tx1.pt')
+    torch.save(y, 'ty1.pt')
 
     return
 
-def a2c_star_train():
+def test_a2c_star_agent(args, render=True, rounds=1):
     from staragent import StarAgent 
-    agent = StarAgent(1, 0.9, a_lr=1e-5, c_lr=5e-5, batch_size =256, batch_round=1,\
+    agent = StarAgent(1000, 0.9, a_lr=1e-4, c_lr=5e-4, batch_size =16, batch_round=3,\
                       update_round=5, step_limit=10000000, action_dim=2, \
                       action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=50000, input_dim=208,\
                         collision_weight=3, distance_weight=5, center_line_weight=0.1,\
                         render=True, round_precision=3, stuck_counter_limit=20, maxT=5, patch_length=16)
-    #loaded_actor_dict = torch.load("./actor_str.pth")
-    #agent.act_net.load_state_dict(loaded_actor_dict)
-    #loaded_critic_dict = torch.load("./critic_str.pth")
-    #agent.critic_net.load_state_dict(loaded_critic_dict)
+    loaded_actor_dict = torch.load("./actor_str.pth")
+    agent.act_net.load_state_dict(loaded_actor_dict)
+    try:
+        env = RACE_ENV(args, collision_weight=30, distance_weight=5, center_line_weight=5, render=True, round_precision=4, stuck_counter_limit=100)
+        for _ in range(0, rounds):
+            state, info = env.reset()
+            state = convert_state_to_tensor(state)
+            if info is not None:
+                print("Testing: error environment reset")
+                return
+            test_end = False
+            visiting_states = None
+            visiting_actions = None
+
+            while test_end is False:
+                assert (visiting_states is None and visiting_actions is None) or \
+                    ((visiting_states.size(0) == visiting_actions.size(0))\
+                    and visiting_states.size(0) <=agent.maxT), "Error stacking visiting states"
+                
+                if visiting_states is None:
+                    visiting_states = deepcopy(state)
+                else:
+                    if visiting_states.size(0) == agent.maxT:
+                        visiting_states = visiting_states[1:, ...]
+                        visiting_actions = visiting_actions[1:, ...]
+                    visiting_states = torch.vstack((visiting_states, state))
+            
+                # Step the environment based on the selected action
+                # Note: this action is on GPU and is a tensor
+                # Add a dummpy action padding
+                if visiting_actions is None:
+                    visiting_actions = torch.zeros(1, agent.action_dim).to(device)
+                else:
+                    visiting_actions = torch.vstack((visiting_actions, torch.zeros(1, visiting_actions.size(1)).to(device)))
+            
+                # Convert the form of input
+                visiting_states = visiting_states.unsqueeze(0)
+                visiting_actions = visiting_actions.unsqueeze(0)
+                action = agent.sample_action_from_state_gaussian(visiting_states, visiting_actions)
+                
+                # Convert the forms back
+                visiting_states = visiting_states.squeeze(0)#.view(visiting_states.size(1), -1)
+                visiting_actions = visiting_actions.squeeze(0)#.view(visiting_actions.size(1), -1)
+                visiting_actions = visiting_actions[:-1, ...] # Throuw away the dummy action
+                visiting_actions = torch.vstack((visiting_actions, action))
+                assert visiting_states.size(0) == visiting_actions.size(0), "Visting states and actions are not eqaul"
+                
+                # Convert the action to control object before stepping.
+                control = get_control_from_action(action)
+                
+                state, reward, terminated, truncation = env.step(control)
+                state = convert_state_to_tensor(state)
+                #print("Reward is: ", reward)
+                if terminated or truncation:
+                    #print("Meet termination or truncation")
+                    test_end = True
+    finally:
+        env.close()
+    return
+
+def a2c_star_train():
+    from staragent import StarAgent 
+    agent = StarAgent(1000, 0.9, a_lr=1e-4, c_lr=5e-4, batch_size =16, batch_round=3,\
+                      update_round=5, step_limit=10000000, action_dim=2, \
+                      action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=50000, input_dim=208,\
+                        collision_weight=3, distance_weight=5, center_line_weight=0.1,\
+                        render=True, round_precision=3, stuck_counter_limit=20, maxT=5, patch_length=16)
+    loaded_actor_dict = torch.load("./actor_str.pth")
+    agent.act_net.load_state_dict(loaded_actor_dict)
+    loaded_critic_dict = torch.load("./critic_str.pth")
+    agent.critic_net.load_state_dict(loaded_critic_dict)
     agent.train()
     torch.save(agent.act_net.state_dict(), "./actor_str.pth")
     torch.save(agent.critic_net.state_dict(), "./critic_str.pth")
@@ -1367,9 +1429,14 @@ def a2c_star_train():
 
 def main():
     try:
+        # Triaining =================================================
         #a2c_train()
-        #test2(args, render=True, rounds=20)
-        a2c_star_train()
+        #a2c_star_train()
+
+        # Testing ===================================================
+        test_plain(args, render=True, rounds=20)
+        #test_a2c_agent(args, True, 10)
+        #test_a2c_star_agent(args, True, 10)
         print('end of game loop')
     except KeyboardInterrupt:
         print('\nCancelled by user. Bye!')
