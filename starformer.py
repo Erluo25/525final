@@ -323,7 +323,7 @@ class Starformer(nn.Module):
     
     def forward(self, states, actions, targets=None, rewards=None):
         # actions should be already padded by dataloader
-
+        print(states.size(), actions.size())
         local_tokens, global_state_tokens, temporal_emb = self.token_emb(states, actions, rewards=rewards)
         local_tokens = self.local_pos_drop(local_tokens)
         if ('xconv' not in self.config.model_type) and ('stack' not in self.config.model_type):

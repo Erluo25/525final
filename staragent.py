@@ -30,7 +30,7 @@ class StarAgent():
     self.patch_length = patch_length
 
     # Basic starformer configurations
-    self.actor_config = StarformerConfig(action_dim, action_dim + action_dim * action_dim, vector_length = input_dim, patch_length = self.patch_length,
+    self.actor_config = StarformerConfig(action_dim, action_dim + action_dim * action_dim, vector_length = self.input_dim, patch_length = self.patch_length,
                          context_length=30, pos_drop=0.1, resid_drop=0.1,
                           N_head=8, D=192, local_N_head=4, local_D=64, model_type='star', max_timestep=100, n_layer=6, maxT=10, 
                           action_type='continuous')
@@ -76,7 +76,7 @@ class StarAgent():
     return control
   
   def forward_state(self, visiting_states, visiting_actions):
-    act_net_result = self.act_net(visiting_states, visiting_actions, None) 
+    act_net_result, _, _ = self.act_net(visiting_states, visiting_actions, None) 
     mean = act_net_result[..., :self.action_dim]
     cov_mat = act_net_result[..., self.action_dim:].view(-1, self.action_dim, self.action_dim)
     transpose_cov_mat = cov_mat.transpose(1, 2)
@@ -86,7 +86,7 @@ class StarAgent():
     return mean, cov_mat
   
   def sample_action_from_state_gaussian(self, visiting_states, visiting_actions):
-    state = state.to(torch.float32)
+    visiting_states = visiting_states.to(torch.float32)
     mean, cov_mat = self.forward_state(visiting_states, visiting_actions)
     mean = mean.detach()
     cov_mat = cov_mat.detach()
@@ -136,15 +136,15 @@ class StarAgent():
             loop_end = True
           
           assert (visiting_states is None and visiting_actions is None) or \
-            (((visiting_states.view(0) == visiting_actions.view(0) + 1) or \
-              (visiting_states.view(0)==1 and visiting_actions is None))\
-             and visiting_states.view(0) <=self.maxT), "Error stacking visiting states"
+            (((visiting_states.size(0) == visiting_actions.size(0) + 1) or \
+              (visiting_states.size(0)==1 and visiting_actions is None))\
+             and visiting_states.size(0) <=self.maxT), "Error stacking visiting states"
 
           if visiting_states is None:
             visiting_states = deepcopy(current_state)
           else:
-            if visiting_states.view(0) == self.maxT:
-              assert visiting_actions.view(0) == self.maxT -1, "Max truncation error"
+            if visiting_states.size(0) == self.maxT:
+              assert visiting_actions.size(0) == self.maxT -1, "Max truncation error"
               visiting_states = visiting_states[1:, ...]
               visiting_actions = visiting_actions[1:, ...]
               visiting_states = torch.vstack((visiting_states, current_state))
@@ -154,10 +154,16 @@ class StarAgent():
           if visiting_actions is None:
             visiting_actions = torch.zeros(1, self.action_dim).to(device)
           else:
-            visiting_actions = torch.vstack((visiting_actions, torch.zeros(1, visiting_actions.view(1)).to(device)))
+            visiting_actions = torch.vstack((visiting_actions, torch.zeros(1, visiting_actions.size(1)).to(device)))
           
+          # Convert the form of input
+          visiting_states = visiting_states.view(1, visiting_states.size(0), visiting_states.size(1))
+          visiting_actions = visiting_actions.view(1, visiting_actions.size(0), visiting_actions.size(1))
           action = self.sample_action_from_state_gaussian(visiting_states, visiting_actions)
           
+          # Convert the forms back
+          visiting_states = visiting_states.view(visiting_states.size(1), -1)
+          visiting_actions = visiting_actions.view(visiting_actions.size(1), -1)
           visiting_actions = visiting_actions[:-1, ...] # Throuw away the dummy action
           visiting_actions = torch.vstack((visiting_actions, action))
           assert visiting_states.size(0) == visiting_actions.size(0), "Visting states and actions are not eqaul"
@@ -177,7 +183,7 @@ class StarAgent():
           reward_tensor = torch.tensor([[reward]]).to(device).to(torch.float32)
           
           # Need a tensor to store the current index in the trajectory
-          index_tensor = torch.tensor([[step_count - 1]])
+          index_tensor = torch.tensor([[step_count - 1]]).to(device)
 
           # Stacking the replay buffer
           if self.rb_size == 0:
@@ -199,7 +205,7 @@ class StarAgent():
               self.reward_rb.size(0) == self.rb_size, "Invalid stack size during stacking"
             assert self.current_state_rb.size() == self.next_state_rb.size(),\
                 "Current state stack size not equal to next state stack size "
-            assert self.action_rb.size(1) == self.act_net.action_dim, \
+            assert self.action_rb.size(1) == self.action_dim, \
                 "Action stack width is incorrect"
             assert self.done_list_rb.size(1) == self.reward_rb.size(1) == self.index_rb.size(1) == 1,\
                 "Reward stack width and done list stack width is not eqaul to 1"
@@ -274,7 +280,7 @@ class StarAgent():
 
     assert self.current_state_rb.size() == self.next_state_rb.size(),\
             "Current state stack size not equal to next state stack size (batch)"
-    assert self.action_rb.size(1) == self.act_net.action_dim, \
+    assert self.action_rb.size(1) == self.action_dim, \
             "Action stack width is incorrect (batch)"
     assert self.done_list_rb.size(1) == self.reward_rb.size(1) == self.index_rb.size(1) == 1,\
             "Reward stack width and done list stack width is not eqaul to 1 (batch)"
@@ -320,9 +326,9 @@ class StarAgent():
 
     
     # Combine the stack lists
-    current_state_stack = torch.vstack(state_stack_list).view(self.batch_size, self.maxT, -1)
-    next_state_stack = torch.vstack(next_state_stack_list).view(self.batch_size, self.maxT, -1)
-    action_stack = torch.vstack(action_stack_list).view(self.batch_size, self.maxT, -1)
+    current_state_stack = torch.vstack(state_stack_list).view(batch_size, self.maxT, -1)
+    next_state_stack = torch.vstack(next_state_stack_list).view(batch_size, self.maxT, -1)
+    action_stack = torch.vstack(action_stack_list).view(batch_size, self.maxT, -1)
     done_list = self.done_list_rb[select_batch_idxs, ...].view(-1, 1)
     trans_reward = self.reward_rb[select_batch_idxs, ...].view(-1, 1)
 
@@ -332,10 +338,12 @@ class StarAgent():
     # 1. Regress the critic network
     
     # 1-1. Use the critic network to compute the current output
-    critic_output = self.critic_net(current_state_stack).view(-1, 1) # Contain gradients
+    critic_output, _, _ = self.critic_net(current_state_stack) # Contain gradients
+    critic_output = critic_output.view(-1, 1)
 
     # 1-2. Use the copy critic network to compute the target
-    critic_target = self.critic_net_copy(next_state_stack).detach().view(-1, 1) # No gradients
+    critic_target, _, _ = self.critic_net_copy(next_state_stack) # No gradients
+    critic_target = critic_target.detach().view(-1, 1)
 
     # Zero out the case where the end of trajectory reach and no need to compute
     # the future expected reward.
@@ -356,14 +364,16 @@ class StarAgent():
     
     # 2-1 To construct Q(s_{t}, a) = r(s_{t}, a) + \gamma V(s_{t+1}), we need 
     # to compute V(s_{t+1})
-    expt_next_state_val = self.critic_net(next_state_stack).detach().view(-1, 1)
+    expt_next_state_val, _, _ = self.critic_net(next_state_stack)
+    expt_next_state_val = expt_next_state_val.detach().view(-1, 1)
     expt_next_state_val[done_indices] = 0
 
     # 2-2 Compose Q(s_{t}, a)
     q_value = self.gamma * expt_next_state_val + trans_reward
 
     # 2-3 Compute V(s_{t})
-    v_value = self.critic_net(current_state_stack).detach().view(-1, 1)
+    v_value, _, _ = self.critic_net(current_state_stack)
+    v_value = v_value.detach().view(-1, 1)
 
     # 2-4 Compose A(s_t, a_t) = Q(s_t, a_t) - V(s_t)
     a_value = q_value - v_value
