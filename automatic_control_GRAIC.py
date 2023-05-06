@@ -1205,7 +1205,7 @@ def a2c_star_train_only_steer():
     from staragent import StarAgent 
     agent = StarAgent(500, 0.95, a_lr=1e-4, c_lr=5e-4, batch_size =16, batch_round=1,\
                       update_round=5, step_limit=10000, action_dim=1, \
-                      action_bound=torch.tensor([math.pi / 6]).to(device), rb_max=50000, input_dim=208,\
+                      action_bound=torch.tensor([0.1]).to(device), rb_max=50000, input_dim=208,\
                         collision_weight=3, distance_weight=8, center_line_weight=0.5,\
                         render=False, round_precision=3, stuck_counter_limit=30, maxT=5, patch_length=16)
     loaded_actor_dict = torch.load("./actor_str1.pth")
@@ -1239,7 +1239,8 @@ def main():
     try:
         # Triaining =================================================
         #a2c_train()
-        a2c_star_train()
+        #a2c_star_train()
+        a2c_star_train_only_steer()
 
         # Testing ===================================================
         #test_plain(args, render=True, rounds=30)
