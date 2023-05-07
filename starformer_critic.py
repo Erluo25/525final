@@ -69,7 +69,7 @@ class PatchEmb_C(nn.Module):
         
         self.temporal_emb = nn.Parameter(torch.zeros(1, maxt, D))
         if 'xconv' not in config.model_type:
-            self.linear_emb = nn.Sequential(nn.Linear(208, 1024), nn.ReLU(), nn.Linear(1024, 256), nn.ReLU(),
+            self.linear_emb = nn.Sequential(nn.Linear(config.vector_length, 1024), nn.ReLU(), nn.Linear(1024, 256), nn.ReLU(),
                                             nn.Linear(256, D), nn.Tanh())
     
     @torch.jit.ignore

@@ -135,7 +135,9 @@ def convert_state_to_tensor(state):
   orientation = np.deg2rad(state[3].rotation.yaw)
   left, right = extract_road_boundary(state[4])
   left = left.reshape(1, -1)
+  left = left[:, 0:20]
   right = right.reshape(1, -1)
+  right = right[:, 0:20]
   bd = np.hstack((left, right))
   bd = torch.from_numpy(bd)
   dist = state[5]
@@ -143,6 +145,7 @@ def convert_state_to_tensor(state):
   steer = state[7]
   temp_s = torch.tensor([[vel_x, vel_y, s_x, s_y, orientation, dist, acc, steer]])
   result_state = torch.hstack((temp_s, bd)).to(device)
+  #print(result_state.size())
   return result_state
 
 
@@ -162,5 +165,21 @@ def get_control_from_action(action):
     control.throttle = 0
     control.brake = -acc
   """
+
+  return control
+
+
+def get_control_from_action_1(action, action_bound):
+  #print("Action is: ", action)
+  action = action_bound * torch.tanh(action)
+  #print("Modified action is: , ",  action)
+  action = convert_action_type(action)
+  control = carla.VehicleControl()
+  steer = action.item(0)
+  #print("Steer type is: ", type(steer))
+  control.steer = steer
+  control.throttle = 0.5
+  
+  #print("Steering is: ", steer)
 
   return control

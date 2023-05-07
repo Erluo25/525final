@@ -100,7 +100,7 @@ class StarAgent():
     gaussian_distribution = MultivariateNormal(mean, cov_mat)
 
     # Get the action from the sample
-    action = gaussian_distribution.sample().detach() 
+    action = gaussian_distribution.sample().detach()#self.action_bound * self.tanh(gaussian_distribution.sample().detach())
     return action
 
   def train(self):
@@ -175,8 +175,9 @@ class StarAgent():
           assert visiting_states.size(0) == visiting_actions.size(0), "Visting states and actions are not eqaul"
         
           # Convert the action to control object before stepping.
-          control = get_control_from_action(action)
-          
+          #control = get_control_from_action(action)
+          control = get_control_from_action_1(action, self.action_bound)
+
           next_state, reward, terminated, truncated = env.step(control)
           #print("Reward is: ", reward)
           
@@ -257,12 +258,12 @@ class StarAgent():
         print("Episode ", i, " finish takes time: ", episode_duration,\
               " with reward: ", episode_reward)
         if (i % 30 == 0):
-          torch.save(self.act_net.state_dict(), "./actor_str1.pth")
-          torch.save(self.critic_net.state_dict(), "./critic_str1.pth")
+          torch.save(self.act_net.state_dict(), "./actor_str2.pth")
+          torch.save(self.critic_net.state_dict(), "./critic_str2.pth")
           x = torch.tensor(self.training_reward_x)
           y = torch.tensor(self.training_reward_y)
-          torch.save(x, 'tx_str1.pt')
-          torch.save(y, 'ty_str1.pt')
+          torch.save(x, 'tx_str3.pt')
+          torch.save(y, 'ty_str3.pt')
 
       print("Total training time is: ", total_train_time)
     finally:
