@@ -1203,15 +1203,15 @@ def a2c_star_train():
 
 def a2c_star_train_only_steer():
     from staragent import StarAgent 
-    agent = StarAgent(500, 0.95, a_lr=1e-4, c_lr=5e-4, batch_size =16, batch_round=1,\
+    agent = StarAgent(2000, 0.95, a_lr=1e-4, c_lr=5e-4, batch_size =16, batch_round=1,\
                       update_round=5, step_limit=10000, action_dim=1, \
                       action_bound=torch.tensor([0.1]).to(device), rb_max=50000, input_dim=208,\
                         collision_weight=3, distance_weight=8, center_line_weight=0.5,\
                         render=False, round_precision=3, stuck_counter_limit=30, maxT=5, patch_length=16)
-    loaded_actor_dict = torch.load("./actor_str1.pth")
-    agent.act_net.load_state_dict(loaded_actor_dict)
-    loaded_critic_dict = torch.load("./critic_str1.pth")
-    agent.critic_net.load_state_dict(loaded_critic_dict)
+    #loaded_actor_dict = torch.load("./actor_str1.pth")
+    #agent.act_net.load_state_dict(loaded_actor_dict)
+    #loaded_critic_dict = torch.load("./critic_str1.pth")
+    #agent.critic_net.load_state_dict(loaded_critic_dict)
     agent.train()
     torch.save(agent.act_net.state_dict(), "./actor_str1.pth")
     torch.save(agent.critic_net.state_dict(), "./critic_str1.pth")
@@ -1222,6 +1222,73 @@ def a2c_star_train_only_steer():
     torch.save(x, 'tx_str1.pt')
     torch.save(y, 'ty_str1.pt')
 
+    return
+
+def test_a2c_star_agent_only_steer(args, render=True, rounds=1):
+    from staragent import StarAgent 
+    agent = StarAgent(10, 0.9, a_lr=1e-4, c_lr=5e-4, batch_size =16, batch_round=3,\
+                      update_round=5, step_limit=10000000, action_dim=2, \
+                      action_bound=torch.tensor([math.pi / 6, 1]).to(device), rb_max=50000, input_dim=208,\
+                        collision_weight=3, distance_weight=5, center_line_weight=0.1,\
+                        render=True, round_precision=3, stuck_counter_limit=20, maxT=5, patch_length=16)
+    loaded_actor_dict = torch.load("./actor_str1.pth")
+    agent.act_net.load_state_dict(loaded_actor_dict)
+    try:
+        env = RACE_ENV(args, collision_weight=30, distance_weight=5, center_line_weight=5, render=True, round_precision=4, stuck_counter_limit=100)
+        for _ in range(0, rounds):
+            state, info = env.reset()
+            state = convert_state_to_tensor(state)
+            if info is not None:
+                print("Testing: error environment reset")
+                return
+            test_end = False
+            visiting_states = None
+            visiting_actions = None
+
+            while test_end is False:
+                assert (visiting_states is None and visiting_actions is None) or \
+                    ((visiting_states.size(0) == visiting_actions.size(0))\
+                    and visiting_states.size(0) <=agent.maxT), "Error stacking visiting states"
+                
+                if visiting_states is None:
+                    visiting_states = deepcopy(state)
+                else:
+                    if visiting_states.size(0) == agent.maxT:
+                        visiting_states = visiting_states[1:, ...]
+                        visiting_actions = visiting_actions[1:, ...]
+                    visiting_states = torch.vstack((visiting_states, state))
+            
+                # Step the environment based on the selected action
+                # Note: this action is on GPU and is a tensor
+                # Add a dummpy action padding
+                if visiting_actions is None:
+                    visiting_actions = torch.zeros(1, agent.action_dim).to(device)
+                else:
+                    visiting_actions = torch.vstack((visiting_actions, torch.zeros(1, visiting_actions.size(1)).to(device)))
+            
+                # Convert the form of input
+                visiting_states = visiting_states.unsqueeze(0)
+                visiting_actions = visiting_actions.unsqueeze(0)
+                action = agent.sample_action_from_state_gaussian(visiting_states, visiting_actions)
+                
+                # Convert the forms back
+                visiting_states = visiting_states.squeeze(0)#.view(visiting_states.size(1), -1)
+                visiting_actions = visiting_actions.squeeze(0)#.view(visiting_actions.size(1), -1)
+                visiting_actions = visiting_actions[:-1, ...] # Throuw away the dummy action
+                visiting_actions = torch.vstack((visiting_actions, action))
+                assert visiting_states.size(0) == visiting_actions.size(0), "Visting states and actions are not eqaul"
+                
+                # Convert the action to control object before stepping.
+                control = get_control_from_action(action)
+                
+                state, reward, terminated, truncation = env.step(control)
+                state = convert_state_to_tensor(state)
+                #print("Reward is: ", reward)
+                if terminated or truncation:
+                    #print("Meet termination or truncation")
+                    test_end = True
+    finally:
+        env.close()
     return
 #===============================================================================
 # ------------ utils  ----------------------------------------
