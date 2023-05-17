@@ -104,7 +104,7 @@ class StarAgent():
     return action
 
   def train(self):
-    update_counter = 0
+    
     total_train_time = 0
     self.critic_net_copy = deepcopy(self.critic_net)
     try:
@@ -116,13 +116,9 @@ class StarAgent():
       
       for i in range (0, self.episode_num):
         # Main entry of the episode.
+        update_counter = 0
         episode_start_time = time.time()
         episode_reward = 0
-        
-        if update_counter == self.update_round:
-          self.critic_net_copy = deepcopy(self.critic_net)
-          update_counter = 0
-        update_counter += 1
         
         # Reset the environment
         current_state, info = env.reset()
@@ -135,6 +131,10 @@ class StarAgent():
         step_count = 0
         loop_end = False
         while loop_end is False:
+          if update_counter == self.update_round:
+            self.critic_net_copy = deepcopy(self.critic_net)
+            update_counter = 0
+          update_counter += 1
           
           step_count += 1
           #print("Step is:", step_count)
@@ -258,13 +258,12 @@ class StarAgent():
         print("Episode ", i, " finish takes time: ", episode_duration,\
               " with reward: ", episode_reward)
         if (i % 30 == 0):
-          torch.save(self.act_net.state_dict(), "./actor_str2.pth")
-          torch.save(self.critic_net.state_dict(), "./critic_str2.pth")
+          torch.save(self.act_net.state_dict(), "./actor_str.pth")
+          torch.save(self.critic_net.state_dict(), "./critic_str.pth")
           x = torch.tensor(self.training_reward_x)
           y = torch.tensor(self.training_reward_y)
-          torch.save(x, 'tx_str3.pt')
-          torch.save(y, 'ty_str3.pt')
-
+          torch.save(x, 'tx_str.pt')
+          torch.save(y, 'ty_str.pt')
       print("Total training time is: ", total_train_time)
     finally:
         env.close()

@@ -1203,24 +1203,24 @@ def a2c_star_train():
 
 def a2c_star_train_only_steer():
     from staragent import StarAgent 
-    agent = StarAgent(5000, 0.95, a_lr=1e-4, c_lr=5e-4, batch_size =16, batch_round=1,\
-                      update_round=5, step_limit=10000, action_dim=1, \
+    agent = StarAgent(1000, 0.95, a_lr=1e-4, c_lr=5e-4, batch_size =16, batch_round=1,\
+                      update_round=10, step_limit=10000, action_dim=1, \
                       action_bound=torch.tensor([0.5]).to(device), rb_max=50000, input_dim=48,\
                         collision_weight=0, distance_weight=8, center_line_weight=0,\
                         render=False, round_precision=3, stuck_counter_limit=30, maxT=5, patch_length=8)
-    loaded_actor_dict = torch.load("./actor_str2.pth")
-    agent.act_net.load_state_dict(loaded_actor_dict)
-    loaded_critic_dict = torch.load("./critic_str2.pth")
-    agent.critic_net.load_state_dict(loaded_critic_dict)
+    #loaded_actor_dict = torch.load("./actor_str2.pth")
+    #agent.act_net.load_state_dict(loaded_actor_dict)
+    #loaded_critic_dict = torch.load("./critic_str2.pth")
+    #agent.critic_net.load_state_dict(loaded_critic_dict)
     agent.train()
-    torch.save(agent.act_net.state_dict(), "./actor_str2.pth")
-    torch.save(agent.critic_net.state_dict(), "./critic_str2.pth")
+    torch.save(agent.act_net.state_dict(), "./actor_str.pth")
+    torch.save(agent.critic_net.state_dict(), "./critic_str.pth")
     #print(agent.training_reward_x, agent.training_reward_y)
     #plot(agent.training_reward_x, agent.training_reward_y, "Cumulative reward", fn="./cumulative_reward.png", shown=True)
     x = torch.tensor(agent.training_reward_x)
     y = torch.tensor(agent.training_reward_y)
-    torch.save(x, 'tx_str3.pt')
-    torch.save(y, 'ty_str3.pt')
+    torch.save(x, 'tx_str.pt')
+    torch.save(y, 'ty_str.pt')
 
     return
 
